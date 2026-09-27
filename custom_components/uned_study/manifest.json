@@ -7,5 +7,5 @@
   "documentation": "https://github.com/antoniorani/ha-uned-study",
   "integration_type": "service",
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.1.0-alpha.1"
 }
