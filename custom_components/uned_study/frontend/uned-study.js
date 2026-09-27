@@ -426,9 +426,13 @@ class UnedStudyPanel extends HTMLElement {
   async openSubject(subjectId) {
     try {
       this.subjectId = subjectId;
-      const subject = await this.call("subject", { subject_id: subjectId });
+      const [subject, dashboard] = await Promise.all([
+        this.call("subject", { subject_id: subjectId }),
+        this.call("dashboard"),
+      ]);
       this.subjectMeta = subject;
-      const summary = this.dashboard?.subjects.find(
+      this.dashboard = dashboard;
+      const summary = dashboard.subjects.find(
         (item) => item.id === subjectId,
       );
       const active = summary?.active_session || null;
