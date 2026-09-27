@@ -9,6 +9,14 @@
           "content_repository": "Content repository",
           "content_branch": "Content branch"
         }
+      },
+      "reconfigure": {
+        "title": "Change content source",
+        "description": "Change the GitHub repository or branch. Study progress is kept locally and is not deleted.",
+        "data": {
+          "content_repository": "Content repository",
+          "content_branch": "Content branch"
+        }
       }
     },
     "error": {
@@ -16,7 +24,8 @@
       "invalid_branch": "The content branch cannot be empty."
     },
     "abort": {
-      "already_configured": "UNED Study is already configured."
+      "already_configured": "UNED Study is already configured.",
+      "reconfigure_successful": "Content source updated successfully."
     }
   }
 }
