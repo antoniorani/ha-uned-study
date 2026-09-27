@@ -260,6 +260,12 @@ class StudyDatabase:
         now = _now()
         with self._lock, self._connect() as db:
             db.execute(
+                """UPDATE study_sessions
+                   SET state='paused'
+                   WHERE user_id=? AND subject_id=? AND state='active'""",
+                (user_id, subject_id),
+            )
+            db.execute(
                 """INSERT INTO study_sessions(
                      session_id,user_id,subject_id,mode,filters_json,
                      started_at,last_activity_at
@@ -277,6 +283,37 @@ class StudyDatabase:
                      last_studied_at=excluded.last_studied_at""",
                 (user_id, subject_id, now),
             )
+
+    async def async_get_active_sessions(
+        self, hass: HomeAssistant, user_id: str
+    ) -> dict[str, dict[str, Any]]:
+        """Return the newest active session for each subject."""
+        return await hass.async_add_executor_job(
+            self._get_active_sessions, user_id
+        )
+
+    def _get_active_sessions(
+        self, user_id: str
+    ) -> dict[str, dict[str, Any]]:
+        with self._lock, self._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM study_sessions
+                   WHERE user_id=? AND state='active'
+                   ORDER BY last_activity_at DESC""",
+                (user_id,),
+            ).fetchall()
+
+        sessions: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            subject_id = row["subject_id"]
+            if subject_id in sessions:
+                continue
+            session = dict(row)
+            session["filters"] = json.loads(
+                session.pop("filters_json")
+            )
+            sessions[subject_id] = session
+        return sessions
 
     async def async_get_session(
         self, hass: HomeAssistant, session_id: str, user_id: str
