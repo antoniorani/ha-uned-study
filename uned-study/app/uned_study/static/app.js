@@ -434,6 +434,23 @@
     }
   }
 
+  async function finishStudySession() {
+    if (!state.sessionId) {
+      await home();
+      return;
+    }
+    try {
+      await api(
+        `api/sessions/${encodeURIComponent(state.sessionId)}/finish`,
+        {method: "POST"}
+      );
+    } catch (_error) {
+      // Returning home is still safe; the next load will expose any
+      // remaining active session if the close request failed.
+    }
+    await home();
+  }
+
   async function nextStudyItem() {
     loading("Buscando lo que más te conviene repasar…");
     try {
@@ -516,7 +533,7 @@
         "Estudiar"
       );
       document.getElementById("next").onclick = nextStudyItem;
-      document.getElementById("finish").onclick = home;
+      document.getElementById("finish").onclick = finishStudySession;
     } catch (error) {
       showError(error);
     }
@@ -555,7 +572,7 @@
     if (!revealed) {
       document.getElementById("reveal").onclick = () =>
         renderCard(item, true);
-      document.getElementById("finish").onclick = home;
+      document.getElementById("finish").onclick = finishStudySession;
     } else {
       root.querySelectorAll("[data-rating]").forEach((button) => {
         button.onclick = () => rateCard(button.dataset.rating);
