@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import html
 import json
 import mimetypes
 from pathlib import Path
@@ -171,8 +172,22 @@ async def health(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-async def index(request: web.Request) -> web.FileResponse:
-    return web.FileResponse(STATIC_DIR / "index.html")
+async def index(request: web.Request) -> web.Response:
+    template = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    base = request.headers.get("X-Ingress-Path", "/")
+    if not base.startswith("/"):
+        base = "/" + base
+    if not base.endswith("/"):
+        base += "/"
+    page = template.replace(
+        "__BASE_PATH__",
+        html.escape(base, quote=True),
+    )
+    return web.Response(
+        text=page,
+        content_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 async def static_file(request: web.Request) -> web.FileResponse:
