@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import probatio
+import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
@@ -26,7 +26,7 @@ def async_register_content_sync_commands(hass: HomeAssistant) -> None:
 
 
 @websocket_api.websocket_command(
-    {probatio.Required("type"): f"{WS_PREFIX}/content_status"}
+    {vol.Required("type"): f"{WS_PREFIX}/content_status"}
 )
 @websocket_api.ws_require_user()
 def ws_content_status(
@@ -55,7 +55,7 @@ def ws_content_status(
 
 
 @websocket_api.websocket_command(
-    {probatio.Required("type"): f"{WS_PREFIX}/sync_content"}
+    {vol.Required("type"): f"{WS_PREFIX}/sync_content"}
 )
 @websocket_api.ws_require_user()
 @websocket_api.async_response
