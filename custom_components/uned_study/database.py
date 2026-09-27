@@ -405,6 +405,34 @@ class StudyDatabase:
             ).fetchall()
         return {row["item_id"] for row in rows}
 
+    async def async_get_review_request(
+        self,
+        hass: HomeAssistant,
+        request_id: str,
+        user_id: str,
+    ) -> dict[str, Any] | None:
+        """Return a previously committed request for the authenticated user."""
+        return await hass.async_add_executor_job(
+            self._get_review_request,
+            request_id,
+            user_id,
+        )
+
+    def _get_review_request(
+        self,
+        request_id: str,
+        user_id: str,
+    ) -> dict[str, Any] | None:
+        with self._lock, self._connect() as db:
+            row = db.execute(
+                """SELECT request_id,user_id,subject_id,item_id,session_id,
+                          result,rating,response_ms,created_at
+                   FROM review_history
+                   WHERE request_id=? AND user_id=?""",
+                (request_id, user_id),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     async def async_request_exists(
         self, hass: HomeAssistant, request_id: str
     ) -> bool:
