@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 
 from .scheduler import ALGORITHM_VERSION, ProgressSnapshot, ScheduleDecision
 
-DB_SCHEMA_VERSION = 1
+DB_SCHEMA_VERSION = 2
 
 
 def _now() -> str:
@@ -115,10 +115,44 @@ class StudyDatabase:
                     "INSERT INTO meta(key,value) VALUES('schema_version',?)",
                     (str(DB_SCHEMA_VERSION),),
                 )
-            elif int(row["value"]) != DB_SCHEMA_VERSION:
+            else:
+                version = int(row["value"])
+                if version > DB_SCHEMA_VERSION:
+                    raise RuntimeError(
+                        f"Unsupported future UNED Study DB schema {version}"
+                    )
+                if version < DB_SCHEMA_VERSION:
+                    self._migrate(db, version)
+
+    def _migrate(
+        self,
+        db: sqlite3.Connection,
+        version: int,
+    ) -> None:
+        """Migrate the SQLite schema forward without losing study data."""
+        while version < DB_SCHEMA_VERSION:
+            if version == 1:
+                columns = {
+                    row["name"]
+                    for row in db.execute(
+                        "PRAGMA table_info(review_history)"
+                    ).fetchall()
+                }
+                if "answer_id" not in columns:
+                    db.execute(
+                        "ALTER TABLE review_history "
+                        "ADD COLUMN answer_id TEXT"
+                    )
+                version = 2
+            else:
                 raise RuntimeError(
-                    f"Unsupported UNED Study DB schema {row['value']}"
+                    f"No migration path from UNED Study DB schema {version}"
                 )
+
+            db.execute(
+                "UPDATE meta SET value=? WHERE key='schema_version'",
+                (str(version),),
+            )
 
     async def async_checkpoint(self, hass: HomeAssistant) -> None:
         await hass.async_add_executor_job(self._checkpoint)
