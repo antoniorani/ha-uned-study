@@ -70,6 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         repository=entry.data[CONF_CONTENT_REPOSITORY],
         branch=entry.data[CONF_CONTENT_BRANCH],
     )
+    await synchronizer.async_load_state(hass)
 
     runtime = UNEDStudyRuntime(
         database=database,
