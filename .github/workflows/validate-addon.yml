@@ -121,3 +121,21 @@ jobs:
         run: |
           echo "Discovered: ${APPS}"
           echo " ${APPS} " | grep -q " uned-study "
+
+  docker-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build aarch64 app image
+        run: |
+          docker build \
+            --platform linux/arm64 \
+            --build-arg BUILD_VERSION=ci \
+            --build-arg BUILD_ARCH=aarch64 \
+            -t uned-study-aarch64-ci \
+            uned-study
