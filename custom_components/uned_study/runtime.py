@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .content.manager import ContentManager
+from .content.sync import GitHubContentSynchronizer
 from .database import StudyDatabase
 
 
@@ -14,3 +15,4 @@ class UNEDStudyRuntime:
 
     database: StudyDatabase
     content: ContentManager
+    synchronizer: GitHubContentSynchronizer
