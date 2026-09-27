@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import math
+import random
 from typing import Protocol, Sequence
 
 ALGORITHM_VERSION = 1
@@ -102,22 +103,27 @@ def choose_next_item(
     *,
     recent_item_ids: set[str] | None = None,
     now: datetime | None = None,
+    rng: random.Random | None = None,
 ) -> SchedulableItem | None:
-    """Choose the highest-priority item outside the recent-review window."""
+    """Choose by weighted priority outside the recent-review window."""
     if not items:
         return None
+
     recent = recent_item_ids or set()
     candidates = [item for item in items if item.id not in recent]
     if not candidates:
         candidates = list(items)
-    return max(
-        candidates,
-        key=lambda item: compute_priority(
+
+    weights = [
+        compute_priority(
             item,
             progress.get(item.id),
             now=now,
-        ),
-    )
+        )
+        for item in candidates
+    ]
+    chooser = rng or random.Random()
+    return chooser.choices(candidates, weights=weights, k=1)[0]
 
 
 def _bounded_interval(importance: int, interval_days: float) -> float:
