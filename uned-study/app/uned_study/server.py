@@ -894,8 +894,8 @@ async def sync_loop(app: web.Application) -> None:
     content: ContentManager = app["content"]
     config: AppConfig = app["config"]
     while True:
-        await content.sync()
         await asyncio.sleep(config.sync_interval_hours * 3600)
+        await content.sync()
 
 
 async def on_startup(app: web.Application) -> None:
