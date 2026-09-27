@@ -336,6 +336,16 @@
         data.user?.name ? `Hola, ${data.user.name}` : "Asignaturas"
       );
 
+      if (
+        data.subjects.length === 0
+        && !data.content?.last_error
+        && !data.content?.last_sync
+      ) {
+        window.setTimeout(() => {
+          if (!state.subjectId && !state.sessionId) home();
+        }, 3000);
+      }
+
       root.querySelectorAll("[data-favorite]").forEach((button) => {
         button.onclick = async () => {
           try {
