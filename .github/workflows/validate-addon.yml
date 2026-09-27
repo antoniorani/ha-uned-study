@@ -73,6 +73,24 @@ jobs:
           test "$(docker inspect -f '{{ index .Config.Labels "io.hass.type" }}' uned-study-ci)" = "app"
           test "$(docker inspect -f '{{ index .Config.Labels "io.hass.arch" }}' uned-study-ci)" = "amd64"
 
+      - name: Smoke-test running app container
+        run: |
+          docker run -d --name uned-study-smoke \
+            -e UNED_STUDY_DEV=1 \
+            -e UNED_STUDY_DATA=/tmp/uned-study-data \
+            -p 18099:8099 \
+            uned-study-ci
+
+          trap 'docker logs uned-study-smoke || true; docker rm -f uned-study-smoke || true' EXIT
+
+          curl --fail --retry 15 --retry-delay 1 --retry-connrefused \
+            http://127.0.0.1:18099/health
+
+          curl --fail --retry 5 --retry-delay 1 \
+            -H 'X-Debug-User-Id: ci-user' \
+            http://127.0.0.1:18099/api/dashboard \
+            | grep -q '"subjects"'
+
   repository-discovery:
     runs-on: ubuntu-latest
     steps:
