@@ -65,6 +65,21 @@ class ExamTests(unittest.TestCase):
         self.assertFalse(expired(state, now=now + timedelta(minutes=29)))
         self.assertTrue(expired(state, now=now + timedelta(minutes=30)))
 
+    def test_missing_real_exam_metadata_is_rejected(self) -> None:
+        value = subject()
+        incomplete = Subject(
+            schema_version=value.schema_version,
+            id=value.id,
+            title=value.title,
+            subject_type=value.subject_type,
+            content_version=value.content_version,
+            topics=value.topics,
+            items=value.items,
+            exam={"questions": 3},
+        )
+        with self.assertRaises(ValueError):
+            build_exam_state(incomplete)
+
     def test_penalty_is_applied(self) -> None:
         state = {
             "item_ids": ["q1", "q2", "q3", "q4"],
