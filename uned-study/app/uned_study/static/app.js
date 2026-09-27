@@ -277,6 +277,8 @@
             const primary = subject.active_session
               ? "Continuar"
               : "Estudiar";
+            const examInProgress =
+              subject.active_session?.kind === "exam";
             return `
               <article class="card" data-subject="${escapeHtml(subject.id)}">
                 <div class="subject-title">
@@ -301,14 +303,16 @@
                   <button class="btn hero-action" data-continue="${escapeHtml(subject.id)}">
                     ${primary}
                   </button>
-                  <button class="btn secondary" data-topic="${escapeHtml(subject.id)}">
-                    Tema
-                  </button>
-                  ${subject.exam_available ? `
-                    <button class="btn secondary" data-exam="${escapeHtml(subject.id)}">
-                      Simulacro
+                  ${examInProgress ? "" : `
+                    <button class="btn secondary" data-topic="${escapeHtml(subject.id)}">
+                      Tema
                     </button>
-                  ` : ""}
+                    ${subject.exam_available ? `
+                      <button class="btn secondary" data-exam="${escapeHtml(subject.id)}">
+                        Simulacro
+                      </button>
+                    ` : ""}
+                  `}
                 </div>
               </article>
             `;
