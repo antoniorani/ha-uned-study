@@ -417,6 +417,8 @@ class StudyDatabase:
                 correct_count=row["correct_count"],
                 incorrect_count=row["incorrect_count"],
                 current_streak=row["current_streak"],
+                mastery=float(row["mastery"]),
+                difficulty=float(row["difficulty"]),
                 interval_days=row["interval_days"],
                 last_seen_at=_dt(row["last_seen_at"]),
                 next_review_at=_dt(row["next_review_at"]),
