@@ -4,12 +4,16 @@
     "step": {
       "user": {
         "title": "Configurar UNED Study",
-        "description": "Configura el repositorio que proporcionará el contenido de las asignaturas. La sincronización será gestionada por la integración.",
+        "description": "Configura el repositorio GitHub que proporciona el contenido de las asignaturas.",
         "data": {
           "content_repository": "Repositorio de contenidos",
           "content_branch": "Rama de contenidos"
         }
       }
+    },
+    "error": {
+      "invalid_repository": "Introduce un repositorio público válido de github.com.",
+      "invalid_branch": "La rama de contenidos no puede estar vacía."
     },
     "abort": {
       "already_configured": "UNED Study ya está configurado."
