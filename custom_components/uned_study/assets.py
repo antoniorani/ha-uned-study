@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-import mimetypes
 from pathlib import Path, PurePosixPath
 import re
 
@@ -13,6 +12,14 @@ from homeassistant.core import HomeAssistant
 
 _ASSET_SUBJECT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 MAX_SERVED_ASSET_BYTES = 30 * 1024 * 1024
+SAFE_ASSET_TYPES = {
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
 
 
 class UNEDStudyAssetView(HomeAssistantView):
@@ -63,6 +70,11 @@ class UNEDStudyAssetView(HomeAssistantView):
             content_type=content_type,
             headers={
                 "Cache-Control": "private, max-age=3600",
+                "Content-Security-Policy": (
+                    "sandbox; default-src 'none'; "
+                    "img-src data:; style-src 'unsafe-inline'"
+                ),
+                "Cross-Origin-Resource-Policy": "same-origin",
                 "X-Content-Type-Options": "nosniff",
             },
         )
@@ -96,8 +108,9 @@ class UNEDStudyAssetView(HomeAssistantView):
         except OSError:
             return None
 
-        guessed, _encoding = mimetypes.guess_type(resolved.name)
-        content_type = guessed or "application/octet-stream"
+        content_type = SAFE_ASSET_TYPES.get(resolved.suffix.lower())
+        if content_type is None:
+            return None
         return body, content_type
 
 
