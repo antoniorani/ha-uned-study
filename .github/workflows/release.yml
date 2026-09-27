@@ -1,0 +1,45 @@
+name: Release package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14.2"
+
+      - name: Check Python and JSON
+        run: |
+          python -m compileall -q custom_components
+          python -m json.tool custom_components/uned_study/manifest.json > /dev/null
+          python -m json.tool hacs.json > /dev/null
+
+      - name: Check frontend JavaScript
+        run: node --check custom_components/uned_study/frontend/uned-study.js
+
+      - name: Build manual-install ZIP
+        run: |
+          python tools/package_release.py             --version "${GITHUB_REF_NAME#v}"             --output-dir dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "${GITHUB_REF_NAME}" in
+            *-alpha*|*-beta*|*-rc*) prerelease="--prerelease" ;;
+          esac
+
+          gh release create "${GITHUB_REF_NAME}"             dist/*.zip             --verify-tag             --generate-notes             ${prerelease}
