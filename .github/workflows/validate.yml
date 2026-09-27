@@ -64,3 +64,6 @@ jobs:
           ).slug == "antoniorani/uned-study-content"
           assert "adaptive" in STUDY_MODES
           PY
+
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
