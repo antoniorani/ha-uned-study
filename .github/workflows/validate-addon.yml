@@ -72,3 +72,20 @@ jobs:
         run: |
           test "$(docker inspect -f '{{ index .Config.Labels "io.hass.type" }}' uned-study-ci)" = "app"
           test "$(docker inspect -f '{{ index .Config.Labels "io.hass.arch" }}' uned-study-ci)" = "amd64"
+
+  repository-discovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Discover Home Assistant apps
+        id: apps
+        uses: home-assistant/actions/helpers/find-addons@master
+
+      - name: Verify UNED Study is discoverable
+        env:
+          APPS: ${{ steps.apps.outputs.addons }}
+        run: |
+          echo "Discovered: ${APPS}"
+          echo " ${APPS} " | grep -q " uned-study "
