@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .assets import async_register_asset_view
 from .const import (
     CONF_CONTENT_BRANCH,
     CONF_CONTENT_REPOSITORY,
@@ -34,8 +35,12 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up integration-wide resources."""
+    content_dir = (
+        Path(hass.config.path(DATA_DIRECTORY)) / CONTENT_DIRECTORY
+    )
     async_register_websocket_commands(hass)
     async_register_content_sync_commands(hass)
+    async_register_asset_view(hass, content_dir)
     await async_register_static_assets(hass)
     return True
 
