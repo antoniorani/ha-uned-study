@@ -71,3 +71,12 @@ jobs:
 
       - name: Run regression tests
         run: python -m unittest discover -s tests -v
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate custom integration with hassfest
+        uses: home-assistant/actions/hassfest@master
