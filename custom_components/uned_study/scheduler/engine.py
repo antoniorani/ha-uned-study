@@ -25,6 +25,8 @@ class ProgressSnapshot:
     correct_count: int = 0
     incorrect_count: int = 0
     current_streak: int = 0
+    mastery: float = 0.0
+    difficulty: float = 0.5
     interval_days: float = 0.0
     last_seen_at: datetime | None = None
     next_review_at: datetime | None = None
