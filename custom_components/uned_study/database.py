@@ -372,6 +372,33 @@ class StudyDatabase:
         result["filters"] = json.loads(result.pop("filters_json"))
         return result
 
+    async def async_complete_session(
+        self,
+        hass: HomeAssistant,
+        session_id: str,
+        user_id: str,
+    ) -> None:
+        """Mark a study session complete without deleting its history."""
+        await hass.async_add_executor_job(
+            self._complete_session,
+            session_id,
+            user_id,
+        )
+
+    def _complete_session(
+        self,
+        session_id: str,
+        user_id: str,
+    ) -> None:
+        with self._lock, self._connect() as db:
+            db.execute(
+                """UPDATE study_sessions
+                   SET state='completed',current_item_id=NULL,
+                       last_activity_at=?
+                   WHERE session_id=? AND user_id=?""",
+                (_now(), session_id, user_id),
+            )
+
     async def async_set_current_item(
         self,
         hass: HomeAssistant,
