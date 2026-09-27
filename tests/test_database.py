@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 
@@ -136,6 +137,62 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(new["state"], "active")
         active = self.db._get_active_sessions("user-a")
         self.assertEqual(active["civil"]["session_id"], "session-new")
+
+    def test_schema_v1_is_migrated_without_deleting_history(self) -> None:
+        legacy_path = Path(self.temp.name) / "legacy.db"
+        with sqlite3.connect(legacy_path) as legacy:
+            legacy.executescript(
+                """
+                CREATE TABLE meta(
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                INSERT INTO meta(key,value)
+                VALUES('schema_version','1');
+
+                CREATE TABLE review_history(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id TEXT NOT NULL UNIQUE,
+                    user_id TEXT NOT NULL,
+                    subject_id TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    session_id TEXT,
+                    result TEXT NOT NULL,
+                    rating TEXT,
+                    response_ms INTEGER,
+                    created_at TEXT NOT NULL
+                );
+                INSERT INTO review_history(
+                    request_id,user_id,subject_id,item_id,session_id,
+                    result,rating,response_ms,created_at
+                ) VALUES(
+                    'legacy-request','user-a','civil','civil-q001',
+                    'legacy-session','incorrect',NULL,1000,
+                    '2026-09-27T20:00:00+00:00'
+                );
+                """
+            )
+
+        migrated = StudyDatabase(legacy_path)
+        migrated._initialize()
+
+        with sqlite3.connect(legacy_path) as check:
+            version = check.execute(
+                "SELECT value FROM meta WHERE key='schema_version'"
+            ).fetchone()[0]
+            columns = {
+                row[1]
+                for row in check.execute(
+                    "PRAGMA table_info(review_history)"
+                ).fetchall()
+            }
+            count = check.execute(
+                "SELECT COUNT(*) FROM review_history"
+            ).fetchone()[0]
+
+        self.assertEqual(version, "2")
+        self.assertIn("answer_id", columns)
+        self.assertEqual(count, 1)
 
     def test_checkpoint_is_safe(self) -> None:
         self.db._checkpoint()
