@@ -501,8 +501,22 @@ async def ws_next_item(
         progress,
     )
     if not items:
-        connection.send_error(
-            msg["id"], "no_items", "No items match this study mode"
+        await runtime.database.async_complete_session(
+            hass,
+            session["session_id"],
+            connection.user.id,
+        )
+        connection.send_result(
+            msg["id"],
+            {
+                "complete": True,
+                "session": {
+                    "answered_count": session["answered_count"],
+                    "correct_count": session["correct_count"],
+                    "incorrect_count": session["incorrect_count"],
+                    "mode": session["mode"],
+                },
+            },
         )
         return
 
