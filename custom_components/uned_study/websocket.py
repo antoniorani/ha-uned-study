@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -13,7 +14,14 @@ from homeassistant.core import HomeAssistant, callback
 from .const import DOMAIN, WS_PREFIX
 from .content.models import Flashcard, TestQuestion
 from .runtime import UNEDStudyRuntime
-from .scheduler import choose_next_item, schedule_flashcard, schedule_test
+from .scheduler import (
+    ProgressSnapshot,
+    choose_next_item,
+    schedule_flashcard,
+    schedule_test,
+)
+
+STUDY_MODES = ("adaptive", "due", "errors", "new", "important")
 
 
 def _runtime(hass: HomeAssistant) -> UNEDStudyRuntime | None:
@@ -65,6 +73,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_dashboard,
         ws_subject,
         ws_start_session,
+        ws_resume_session,
         ws_next_item,
         ws_submit_answer,
         ws_rate_card,
@@ -95,10 +104,14 @@ async def ws_dashboard(
     aggregates = await runtime.database.async_get_subject_aggregates(
         hass, user_id
     )
+    active_sessions = await runtime.database.async_get_active_sessions(
+        hass, user_id
+    )
 
     subjects = []
     for subject in runtime.content.subjects.values():
         pref = prefs.get(subject.id, {})
+        active = active_sessions.get(subject.id)
         subjects.append(
             {
                 "id": subject.id,
@@ -113,6 +126,17 @@ async def ws_dashboard(
                 "favorite_order": pref.get("favorite_order"),
                 "last_studied_at": pref.get("last_studied_at"),
                 "progress": aggregates.get(subject.id, {}),
+                "active_session": (
+                    {
+                        "session_id": active["session_id"],
+                        "mode": active["mode"],
+                        "filters": active["filters"],
+                        "current_item_id": active["current_item_id"],
+                        "answered_count": active["answered_count"],
+                    }
+                    if active
+                    else None
+                ),
             }
         )
 
@@ -178,7 +202,9 @@ async def ws_subject(
     {
         probatio.Required("type"): f"{WS_PREFIX}/start_session",
         probatio.Required("subject_id"): str,
-        probatio.Optional("mode", default="adaptive"): str,
+        probatio.Optional("mode", default="adaptive"): probatio.In(
+            STUDY_MODES
+        ),
         probatio.Optional("topic"): str,
     }
 )
@@ -220,7 +246,60 @@ async def ws_start_session(
     )
     connection.send_result(
         msg["id"],
-        {"session_id": session_id, "subject_type": subject.type.value},
+        {
+            "session_id": session_id,
+            "subject_type": subject.type.value,
+            "mode": msg["mode"],
+            "filters": filters,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): f"{WS_PREFIX}/resume_session",
+        probatio.Required("session_id"): str,
+    }
+)
+@websocket_api.ws_require_user()
+@websocket_api.async_response
+async def ws_resume_session(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Resume the authenticated user's active study session."""
+    loaded = await _session_and_subject(
+        hass, connection, msg["session_id"]
+    )
+    if loaded is None:
+        connection.send_error(
+            msg["id"], "not_found", "Study session is unavailable"
+        )
+        return
+    _runtime_value, session, subject = loaded
+    if session["state"] != "active":
+        connection.send_error(
+            msg["id"], "inactive_session", "Study session is not active"
+        )
+        return
+
+    current = None
+    if session["current_item_id"]:
+        item = subject.items_by_id.get(session["current_item_id"])
+        if item is not None:
+            current = _serialize_item(item)
+
+    connection.send_result(
+        msg["id"],
+        {
+            "session_id": session["session_id"],
+            "subject_id": subject.id,
+            "subject_type": subject.type.value,
+            "mode": session["mode"],
+            "filters": session["filters"],
+            "item": current,
+        },
     )
 
 
@@ -241,6 +320,53 @@ async def _session_and_subject(
     if subject is None:
         return None
     return runtime, session, subject
+
+
+def _eligible_items(
+    items: list[TestQuestion | Flashcard],
+    session: dict[str, Any],
+    progress: dict[str, ProgressSnapshot],
+) -> list[TestQuestion | Flashcard]:
+    """Apply session topic and study-mode filters."""
+    topic = session["filters"].get("topic")
+    if topic:
+        items = [item for item in items if item.topic == topic]
+
+    mode = session["mode"]
+    if mode == "adaptive":
+        return items
+    if mode == "errors":
+        return [
+            item
+            for item in items
+            if (
+                (item_progress := progress.get(item.id)) is not None
+                and item_progress.incorrect_count > 0
+            )
+        ]
+    if mode == "new":
+        return [
+            item
+            for item in items
+            if (
+                (item_progress := progress.get(item.id)) is None
+                or item_progress.times_seen == 0
+            )
+        ]
+    if mode == "important":
+        return [item for item in items if item.importance >= 4]
+    if mode == "due":
+        now = datetime.now(timezone.utc)
+        return [
+            item
+            for item in items
+            if (
+                (item_progress := progress.get(item.id)) is not None
+                and item_progress.next_review_at is not None
+                and item_progress.next_review_at <= now
+            )
+        ]
+    return items
 
 
 @websocket_api.websocket_command(
@@ -266,19 +392,20 @@ async def ws_next_item(
         return
     runtime, session, subject = loaded
 
-    items = list(subject.items)
-    topic = session["filters"].get("topic")
-    if topic:
-        items = [item for item in items if item.topic == topic]
-    if not items:
-        connection.send_error(
-            msg["id"], "no_items", "No items match this session"
-        )
-        return
-
     progress = await runtime.database.async_get_progress_map(
         hass, connection.user.id, subject.id
     )
+    items = _eligible_items(
+        list(subject.items),
+        session,
+        progress,
+    )
+    if not items:
+        connection.send_error(
+            msg["id"], "no_items", "No items match this study mode"
+        )
+        return
+
     recent = await runtime.database.async_recent_item_ids(
         hass, session["session_id"], limit=10
     )
@@ -348,7 +475,11 @@ async def ws_submit_answer(
     ):
         connection.send_result(
             msg["id"],
-            {"duplicate": True, "item": _serialize_item(item, reveal=True)},
+            {
+                "duplicate": True,
+                "correct": msg["answer_id"] == item.correct_answer,
+                "item": _serialize_item(item, reveal=True),
+            },
         )
         return
 
