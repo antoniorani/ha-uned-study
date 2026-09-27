@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
+import json
 import logging
 import os
 from pathlib import Path, PurePosixPath
@@ -25,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 MAX_EXPANDED_BYTES = 300 * 1024 * 1024
 MAX_SINGLE_FILE_BYTES = 30 * 1024 * 1024
+SYNC_STATE_FILENAME = "content-sync-state.json"
 
 _GITHUB_REPO_RE = re.compile(
     r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
@@ -109,8 +111,61 @@ class GitHubContentSynchronizer:
         if not self.branch:
             raise ValueError("GitHub branch must not be empty")
 
+        self.state_path = data_dir / SYNC_STATE_FILENAME
         self.last_report: SyncReport | None = None
         self.last_error: str | None = None
+
+    async def async_load_state(self, hass: HomeAssistant) -> None:
+        """Restore synchronization metadata from the persistent data directory."""
+        await hass.async_add_executor_job(self._load_state)
+
+    def _load_state(self) -> None:
+        try:
+            raw = json.loads(self.state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(raw, dict):
+            return
+        if raw.get("repository") != self.repository.slug:
+            return
+        if raw.get("branch") != self.branch:
+            return
+
+        report = raw.get("last_sync")
+        if isinstance(report, dict):
+            try:
+                self.last_report = SyncReport(
+                    repository=str(report["repository"]),
+                    branch=str(report["branch"]),
+                    subject_count=int(report["subject_count"]),
+                    synced_at=str(report["synced_at"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                self.last_report = None
+
+        last_error = raw.get("last_error")
+        self.last_error = (
+            last_error if isinstance(last_error, str) else None
+        )
+
+    def _save_state(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = self.state_path.with_suffix(".json.tmp")
+        payload = {
+            "repository": self.repository.slug,
+            "branch": self.branch,
+            "last_sync": (
+                self.last_report.as_dict()
+                if self.last_report is not None
+                else None
+            ),
+            "last_error": self.last_error,
+        }
+        temp_path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temp_path, self.state_path)
 
     @property
     def source(self) -> dict[str, object]:
@@ -133,9 +188,12 @@ class GitHubContentSynchronizer:
             )
         except Exception as exc:
             self.last_error = str(exc)
+            await hass.async_add_executor_job(self._save_state)
             raise
+
         self.last_report = report
         self.last_error = None
+        await hass.async_add_executor_job(self._save_state)
         return report
 
     async def _async_download(self, hass: HomeAssistant) -> bytes:
