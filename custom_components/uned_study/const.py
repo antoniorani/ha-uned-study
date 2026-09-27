@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "uned_study"
 NAME = "UNED Study"
-VERSION = "0.1.0"
+VERSION = "0.1.0-alpha.1"
 
 CONF_CONTENT_REPOSITORY = "content_repository"
 CONF_CONTENT_BRANCH = "content_branch"
