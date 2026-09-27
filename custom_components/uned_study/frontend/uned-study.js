@@ -149,6 +149,17 @@ class UnedStudyPanel extends HTMLElement {
         .mini { padding:5px 8px; min-width:34px; }
         .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .study-options { display:grid; gap:14px; max-width:620px; }
+        .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
+        .stat {
+          padding:12px; border:1px solid var(--divider-color);
+          border-radius:10px; background:var(--primary-background-color);
+        }
+        .stat strong { display:block; font-size:1.25rem; margin-top:4px; }
+        .topic-list { display:grid; gap:8px; margin-top:12px; }
+        .topic-row {
+          display:grid; grid-template-columns:minmax(0,1fr) auto;
+          gap:10px; padding:8px 0; border-bottom:1px solid var(--divider-color);
+        }
         label { display:grid; gap:6px; font-weight:500; }
         select {
           width:100%; box-sizing:border-box; padding:10px 12px;
@@ -394,13 +405,45 @@ class UnedStudyPanel extends HTMLElement {
         (item) => item.id === subjectId,
       );
       const active = summary?.active_session || null;
+      const statistics = subject.statistics || {};
+      const overall = statistics.overall || {};
+      const topicStatistics = new Map(
+        (statistics.topics || []).map((topic) => [topic.id, topic]),
+      );
+      const accuracy = overall.accuracy == null
+        ? "—"
+        : `${Math.round(overall.accuracy * 100)}%`;
+      const mastery = `${Math.round((overall.mastery || 0) * 100)}%`;
+
       const topicOptions = subject.topics
-        .map(
-          (topic) => `
+        .map((topic) => {
+          const stats = topicStatistics.get(topic.id) || {};
+          return `
             <option value="${this.escape(topic.id)}">
               ${this.escape(topic.title)}
-            </option>`,
-        )
+              · ${stats.studied || 0}/${stats.total || 0}
+              · ${stats.due || 0} vencidas
+            </option>`;
+        })
+        .join("");
+
+      const topicRows = subject.topics
+        .map((topic) => {
+          const stats = topicStatistics.get(topic.id) || {};
+          const attempts = (stats.correct || 0) + (stats.incorrect || 0);
+          const topicAccuracy = attempts
+            ? `${Math.round(100 * (stats.correct || 0) / attempts)}%`
+            : "—";
+          return `
+            <div class="topic-row">
+              <span>${this.escape(topic.title)}</span>
+              <span class="muted small">
+                ${stats.studied || 0}/${stats.total || 0}
+                · ${stats.due || 0} vencidas
+                · ${topicAccuracy}
+              </span>
+            </div>`;
+        })
         .join("");
 
       this.shell(`
@@ -418,6 +461,17 @@ class UnedStudyPanel extends HTMLElement {
             <button id="continue-session">Continuar sesión</button>
           </div>
         ` : ""}
+        <div class="card" style="margin-bottom:16px">
+          <h2 style="margin-top:0">Progreso</h2>
+          <div class="stats">
+            <div class="stat"><span class="muted small">Estudiadas</span><strong>${overall.studied || 0}/${overall.total || 0}</strong></div>
+            <div class="stat"><span class="muted small">Nuevas</span><strong>${overall.new || 0}</strong></div>
+            <div class="stat"><span class="muted small">Vencidas</span><strong>${overall.due || 0}</strong></div>
+            <div class="stat"><span class="muted small">Acierto</span><strong>${accuracy}</strong></div>
+            <div class="stat"><span class="muted small">Dominio</span><strong>${mastery}</strong></div>
+          </div>
+          <div class="topic-list">${topicRows}</div>
+        </div>
         <div class="card">
           <h2 style="margin-top:0">Nueva sesión</h2>
           <div class="study-options">
