@@ -24,36 +24,86 @@ class UnedStudyPanel extends HTMLElement {
       .replaceAll("'", "&#039;");
   }
 
-  rewriteAssetLinks(value = "") {
+  async signAssetPath(rawPath) {
     if (!this.subjectId) {
-      return String(value);
+      return null;
     }
-    const base = `/api/uned_study/assets/${encodeURIComponent(this.subjectId)}/`;
-    return String(value).replace(
-      /\]\(assets\/([^\s)]+)\)/g,
-      (_match, path) => {
-        const safePath = path
-          .split("/")
-          .map((part) => encodeURIComponent(part))
-          .join("/");
-        return `](${base}${safePath})`;
-      },
-    );
+
+    this._signedAssetCache ??= new Map();
+    const safePath = rawPath
+      .split("/")
+      .map((part) => encodeURIComponent(part))
+      .join("/");
+    const apiPath =
+      `/api/uned_study/assets/${encodeURIComponent(this.subjectId)}/${safePath}`;
+    const cached = this._signedAssetCache.get(apiPath);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.path;
+    }
+
+    const result = await this._hass.callWS({
+      type: "auth/sign_path",
+      path: apiPath,
+      expires: 600,
+    });
+    if (!result?.path) {
+      return null;
+    }
+
+    this._signedAssetCache.set(apiPath, {
+      path: result.path,
+      expiresAt: Date.now() + 540_000,
+    });
+    return result.path;
+  }
+
+  async prepareMarkdown(value = "") {
+    let text = String(value);
+    const assetPattern = /\]\(assets\/([^\s)]+)\)/g;
+    const paths = [
+      ...new Set(
+        [...text.matchAll(assetPattern)].map((match) => match[1]),
+      ),
+    ];
+
+    for (const rawPath of paths) {
+      try {
+        const signedPath = await this.signAssetPath(rawPath);
+        if (!signedPath) {
+          continue;
+        }
+        text = text.split(`](assets/${rawPath})`).join(`](${signedPath})`);
+      } catch (error) {
+        console.warn("UNED Study could not sign asset path", rawPath, error);
+      }
+    }
+    return text;
   }
 
   md(value = "") {
     this._pendingMarkdown ??= new Map();
     this._markdownSequence = (this._markdownSequence || 0) + 1;
     const key = `md-${this._markdownSequence}`;
-    this._pendingMarkdown.set(key, this.rewriteAssetLinks(value));
+    this._pendingMarkdown.set(key, String(value));
     return `<ha-markdown class="markdown" data-md-key="${key}" breaks></ha-markdown>`;
   }
 
   hydrateMarkdown(markdown) {
     const apply = () => {
       this.querySelectorAll("ha-markdown[data-md-key]").forEach((element) => {
-        const value = markdown.get(element.dataset.mdKey) || "";
-        element.content = value;
+        const raw = markdown.get(element.dataset.mdKey) || "";
+        this.prepareMarkdown(raw)
+          .then((value) => {
+            if (element.isConnected) {
+              element.content = value;
+            }
+          })
+          .catch((error) => {
+            console.warn("UNED Study Markdown preparation failed", error);
+            if (element.isConnected) {
+              element.content = raw;
+            }
+          });
       });
     };
     if (customElements.get("ha-markdown")) {
