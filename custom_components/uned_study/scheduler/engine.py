@@ -103,17 +103,19 @@ def choose_next_item(
     recent_item_ids: set[str] | None = None,
     now: datetime | None = None,
 ) -> SchedulableItem | None:
-    """Choose the highest-priority eligible item."""
+    """Choose the highest-priority item outside the recent-review window."""
     if not items:
         return None
     recent = recent_item_ids or set()
+    candidates = [item for item in items if item.id not in recent]
+    if not candidates:
+        candidates = list(items)
     return max(
-        items,
+        candidates,
         key=lambda item: compute_priority(
             item,
             progress.get(item.id),
             now=now,
-            recently_seen=item.id in recent,
         ),
     )
 
