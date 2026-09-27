@@ -96,12 +96,12 @@ def _subject_statistics(
 
     def finalize(stats: dict[str, Any]) -> dict[str, Any]:
         attempts = stats["correct"] + stats["incorrect"]
-        studied = stats["studied"]
+        total = stats["total"]
         stats["accuracy"] = (
             stats["correct"] / attempts if attempts else None
         )
         stats["mastery"] = (
-            stats["_mastery_sum"] / studied if studied else 0.0
+            stats["_mastery_sum"] / total if total else 0.0
         )
         stats.pop("_mastery_sum", None)
         return stats
@@ -624,6 +624,12 @@ async def ws_submit_answer(
         previous_interval_days=(
             previous.interval_days if previous else 0.0
         ),
+        previous_mastery=(
+            previous.mastery if previous else 0.0
+        ),
+        previous_difficulty=(
+            previous.difficulty if previous else 0.5
+        ),
     )
     committed = await runtime.database.async_record_review(
         hass,
@@ -740,6 +746,12 @@ async def ws_rate_card(
         rating=msg["rating"],
         previous_interval_days=(
             previous.interval_days if previous else 0.0
+        ),
+        previous_mastery=(
+            previous.mastery if previous else 0.0
+        ),
+        previous_difficulty=(
+            previous.difficulty if previous else 0.5
         ),
     )
     correct = msg["rating"] in {"good", "easy"}
