@@ -79,6 +79,33 @@ class SchedulerTests(unittest.TestCase):
             now + timedelta(hours=1),
         )
 
+    def test_mastery_accumulates_across_correct_reviews(self) -> None:
+        first = schedule_test(
+            importance=3,
+            was_correct=True,
+            previous_interval_days=0,
+        )
+        second = schedule_test(
+            importance=3,
+            was_correct=True,
+            previous_interval_days=first.interval_days,
+            previous_mastery=first.mastery,
+            previous_difficulty=first.difficulty,
+        )
+        self.assertGreater(second.mastery, first.mastery)
+        self.assertLess(second.difficulty, first.difficulty)
+
+    def test_failure_reduces_existing_mastery(self) -> None:
+        decision = schedule_test(
+            importance=3,
+            was_correct=False,
+            previous_interval_days=7,
+            previous_mastery=0.8,
+            previous_difficulty=0.3,
+        )
+        self.assertLess(decision.mastery, 0.8)
+        self.assertGreater(decision.difficulty, 0.3)
+
     def test_important_easy_card_is_capped(self) -> None:
         decision = schedule_flashcard(
             importance=5,
