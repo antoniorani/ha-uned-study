@@ -138,6 +138,45 @@ class DatabaseTests(unittest.TestCase):
         active = self.db._get_active_sessions("user-a")
         self.assertEqual(active["civil"]["session_id"], "session-new")
 
+    def test_exam_answers_and_index_persist_in_session(self) -> None:
+        self.db._create_session(
+            "exam-1",
+            "user-a",
+            "civil",
+            "exam",
+            {
+                "exam": {
+                    "item_ids": ["q1", "q2"],
+                    "answers": {},
+                    "current_index": 0,
+                    "started_at": "2026-09-27T20:00:00+00:00",
+                    "expires_at": "2026-09-27T21:00:00+00:00",
+                    "duration_minutes": 60,
+                    "wrong_answer_penalty": 0.25,
+                }
+            },
+        )
+
+        self.db._set_exam_answer(
+            "exam-1",
+            "user-a",
+            "q1",
+            "b",
+        )
+        self.db._set_exam_index(
+            "exam-1",
+            "user-a",
+            1,
+        )
+
+        reopened = StudyDatabase(self.path)
+        reopened._initialize()
+        session = reopened._get_session("exam-1", "user-a")
+        exam = session["filters"]["exam"]
+
+        self.assertEqual(exam["answers"], {"q1": "b"})
+        self.assertEqual(exam["current_index"], 1)
+
     def test_schema_v1_is_migrated_without_deleting_history(self) -> None:
         legacy_path = Path(self.temp.name) / "legacy.db"
         with sqlite3.connect(legacy_path) as legacy:
