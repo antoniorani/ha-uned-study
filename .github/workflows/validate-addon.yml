@@ -83,8 +83,17 @@ jobs:
 
           trap 'docker logs uned-study-smoke || true; docker rm -f uned-study-smoke || true' EXIT
 
-          curl --fail --retry 15 --retry-delay 1 --retry-connrefused \
-            http://127.0.0.1:18099/health
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18099/health >/tmp/uned-health.json 2>/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = "true"
+          grep -q '"ok": true' /tmp/uned-health.json
 
           curl --fail --retry 5 --retry-delay 1 \
             -H 'X-Debug-User-Id: ci-user' \
