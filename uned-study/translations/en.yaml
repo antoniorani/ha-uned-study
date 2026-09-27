@@ -1,0 +1,10 @@
+configuration:
+  content_repository:
+    name: Content repository
+    description: Public GitHub repository containing UNED Study subjects.
+  content_branch:
+    name: Content branch
+    description: Git branch used for study content.
+  sync_interval_hours:
+    name: Sync interval
+    description: Hours between automatic content checks.

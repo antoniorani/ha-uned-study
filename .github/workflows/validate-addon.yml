@@ -1,0 +1,141 @@
+name: Validate Home Assistant app
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: addon-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14.2"
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check aiohttp pyyaml
+
+      - name: Validate repository and app configuration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          repository = yaml.safe_load(Path("repository.yaml").read_text())
+          config = yaml.safe_load(Path("uned-study/config.yaml").read_text())
+
+          assert repository["name"] == "UNED Study"
+          assert config["slug"] == "uned_study"
+          assert config["ingress"] is True
+          assert config["ingress_port"] == 8099
+          assert config["panel_admin"] is False
+          assert config["backup"] == "cold"
+          assert set(config["arch"]) == {"amd64", "aarch64"}
+          assert config["stage"] == "experimental"
+          PY
+
+      - name: Compile Python
+        run: python -m compileall -q uned-study/app
+
+      - name: Check frontend JavaScript
+        run: node --check uned-study/app/uned_study/static/app.js
+
+      - name: Run regression tests
+        env:
+          PYTHONPATH: uned-study/app
+        run: python -m unittest discover -s tests -v
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build app image
+        run: |
+          docker build             --build-arg BUILD_VERSION=ci             --build-arg BUILD_ARCH=amd64             -t uned-study-ci             uned-study
+
+      - name: Verify image labels
+        run: |
+          test "$(docker inspect -f '{{ index .Config.Labels "io.hass.type" }}' uned-study-ci)" = "app"
+          test "$(docker inspect -f '{{ index .Config.Labels "io.hass.arch" }}' uned-study-ci)" = "amd64"
+
+      - name: Smoke-test running app container
+        run: |
+          docker run -d --name uned-study-smoke \
+            -e UNED_STUDY_DEV=1 \
+            -e UNED_STUDY_DATA=/tmp/uned-study-data \
+            -p 18099:8099 \
+            uned-study-ci
+
+          trap 'docker logs uned-study-smoke || true; docker rm -f uned-study-smoke || true' EXIT
+
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18099/health >/tmp/uned-health.json 2>/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = "true"
+          grep -q '"ok": true' /tmp/uned-health.json
+
+          curl --fail --retry 5 --retry-delay 1 \
+            -H 'X-Debug-User-Id: ci-user' \
+            http://127.0.0.1:18099/api/dashboard \
+            | grep -q '"subjects"'
+
+          curl --fail \
+            -H 'X-Ingress-Path: /api/hassio_ingress/test-token' \
+            http://127.0.0.1:18099/ \
+            | grep -q '<base href="/api/hassio_ingress/test-token/">'
+
+  repository-discovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Discover Home Assistant apps
+        id: apps
+        uses: home-assistant/actions/helpers/find-addons@master
+
+      - name: Verify UNED Study is discoverable
+        env:
+          APPS: ${{ steps.apps.outputs.addons }}
+        run: |
+          echo "Discovered: ${APPS}"
+          echo " ${APPS} " | grep -q " uned-study "
+
+  docker-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build aarch64 app image
+        run: |
+          docker build \
+            --platform linux/arm64 \
+            --build-arg BUILD_VERSION=ci \
+            --build-arg BUILD_ARCH=aarch64 \
+            -t uned-study-aarch64-ci \
+            uned-study
