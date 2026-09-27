@@ -138,6 +138,8 @@ def schedule_test(
     importance: int,
     was_correct: bool,
     previous_interval_days: float,
+    previous_mastery: float = 0.0,
+    previous_difficulty: float = 0.5,
     now: datetime | None = None,
 ) -> ScheduleDecision:
     """Schedule the next review after a test answer."""
@@ -146,10 +148,12 @@ def schedule_test(
         interval = 1.0 if previous_interval_days <= 0 else max(
             1.0, previous_interval_days * 2.0
         )
-        mastery, difficulty = 0.65, 0.35
+        mastery = min(1.0, previous_mastery + 0.20)
+        difficulty = max(0.05, previous_difficulty - 0.08)
     else:
         interval = 10.0 / (24.0 * 60.0)
-        mastery, difficulty = 0.15, 0.85
+        mastery = max(0.0, previous_mastery * 0.55 - 0.05)
+        difficulty = min(1.0, previous_difficulty + 0.15)
 
     interval = _bounded_interval(importance, interval)
     return ScheduleDecision(
@@ -165,27 +169,35 @@ def schedule_flashcard(
     importance: int,
     rating: str,
     previous_interval_days: float,
+    previous_mastery: float = 0.0,
+    previous_difficulty: float = 0.5,
     now: datetime | None = None,
 ) -> ScheduleDecision:
     """Schedule after Again/Hard/Good/Easy self-rating."""
     now = _utc(now) or datetime.now(timezone.utc)
 
     if rating == "again":
-        interval, mastery, difficulty = 10.0 / (24.0 * 60.0), 0.1, 0.9
+        interval = 10.0 / (24.0 * 60.0)
+        mastery = max(0.0, previous_mastery * 0.45 - 0.05)
+        difficulty = min(1.0, previous_difficulty + 0.18)
     elif rating == "hard":
-        interval, mastery, difficulty = max(
-            1.0, previous_interval_days * 1.2
-        ), 0.45, 0.7
+        interval = max(1.0, previous_interval_days * 1.2)
+        mastery = min(1.0, previous_mastery + 0.06)
+        difficulty = min(1.0, previous_difficulty + 0.05)
     elif rating == "good":
-        interval, mastery, difficulty = (
+        interval = (
             3.0 if previous_interval_days <= 0
             else previous_interval_days * 2.5
-        ), 0.72, 0.4
+        )
+        mastery = min(1.0, previous_mastery + 0.20)
+        difficulty = max(0.05, previous_difficulty - 0.08)
     elif rating == "easy":
-        interval, mastery, difficulty = (
+        interval = (
             7.0 if previous_interval_days <= 0
             else previous_interval_days * 3.5
-        ), 0.9, 0.2
+        )
+        mastery = min(1.0, previous_mastery + 0.30)
+        difficulty = max(0.05, previous_difficulty - 0.15)
     else:
         raise ValueError("rating must be again, hard, good or easy")
 
