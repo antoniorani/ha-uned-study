@@ -114,6 +114,10 @@ class UnedStudyPanel extends HTMLElement {
   }
 
   shell(body) {
+    if (this._examTimer) {
+      clearInterval(this._examTimer);
+      this._examTimer = null;
+    }
     const markdown = this._pendingMarkdown || new Map();
     this._pendingMarkdown = new Map();
     this.innerHTML = `
@@ -172,6 +176,21 @@ class UnedStudyPanel extends HTMLElement {
         .answers { display:grid; gap:10px; margin-top:18px; }
         .answers button { text-align:left; }
         .answers ha-markdown { pointer-events:none; }
+        .answers button.selected {
+          outline:3px solid var(--accent-color, var(--primary-color));
+          outline-offset:1px;
+        }
+        .exam-bar {
+          display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+          justify-content:space-between; margin-bottom:16px;
+        }
+        .exam-clock { font-size:1.25rem; font-weight:700; font-variant-numeric:tabular-nums; }
+        .review-answer {
+          border-radius:8px; padding:8px 10px; margin:6px 0;
+          border:1px solid var(--divider-color);
+        }
+        .review-answer.correct { border-left:4px solid var(--success-color, green); }
+        .review-answer.wrong { border-left:4px solid var(--error-color); }
         .rating { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:18px; }
         .error { border-left:4px solid var(--error-color); }
         .ok { border-left:4px solid var(--success-color, green); }
@@ -279,6 +298,9 @@ class UnedStudyPanel extends HTMLElement {
       this.querySelectorAll("[data-resume]").forEach((button) => {
         button.onclick = () => this.resume(button.dataset.resume);
       });
+      this.querySelectorAll("[data-resume-exam]").forEach((button) => {
+        button.onclick = () => this.resumeExam(button.dataset.resumeExam);
+      });
       this.querySelectorAll("[data-move]").forEach((button) => {
         button.onclick = () => this.moveFavorite(
           button.dataset.subject,
@@ -311,6 +333,7 @@ class UnedStudyPanel extends HTMLElement {
       errors: "Falladas",
       new: "Nuevas",
       important: "Importantes",
+      exam: "Simulacro",
     }[mode] || mode;
   }
 
@@ -359,7 +382,11 @@ class UnedStudyPanel extends HTMLElement {
         ` : ""}
         <div class="actions">
           ${active
-            ? `<button data-resume="${this.escape(active.session_id)}">Continuar</button>`
+            ? (
+              active.mode === "exam"
+                ? `<button data-resume-exam="${this.escape(active.session_id)}">Continuar simulacro</button>`
+                : `<button data-resume="${this.escape(active.session_id)}">Continuar</button>`
+            )
             : ""}
           <button class="${active ? "secondary" : ""}"
             data-open="${this.escape(subject.id)}">
@@ -458,7 +485,7 @@ class UnedStudyPanel extends HTMLElement {
               ${this.escape(this.modeLabel(active.mode))}
               · ${active.answered_count} respondidas
             </p>
-            <button id="continue-session">Continuar sesión</button>
+            <button id="continue-session">${active.mode === "exam" ? "Continuar simulacro" : "Continuar sesión"}</button>
           </div>
         ` : ""}
         <div class="card" style="margin-bottom:16px">
@@ -472,6 +499,21 @@ class UnedStudyPanel extends HTMLElement {
           </div>
           <div class="topic-list">${topicRows}</div>
         </div>
+        ${subject.type === "test" && (subject.exam?.questions || subject.item_count) ? `
+          <div class="card" style="margin-bottom:16px">
+            <h2 style="margin-top:0">Simulacro de examen</h2>
+            <p class="muted">
+              ${subject.exam?.questions || subject.item_count} preguntas
+              · ${subject.exam?.duration_minutes || 60} min
+              · penalización por fallo: ${subject.exam?.wrong_answer_penalty || 0}
+            </p>
+            <p class="small muted">
+              No se muestran correcciones hasta entregar. La selección usa
+              la importancia académica, no tus fallos personales.
+            </p>
+            <button id="start-exam">Empezar simulacro</button>
+          </div>
+        ` : ""}
         <div class="card">
           <h2 style="margin-top:0">Nueva sesión</h2>
           <div class="study-options">
@@ -504,7 +546,15 @@ class UnedStudyPanel extends HTMLElement {
       this.querySelector("#back-dashboard").onclick = () => this.loadDashboard();
       const continueButton = this.querySelector("#continue-session");
       if (continueButton) {
-        continueButton.onclick = () => this.resume(active.session_id);
+        continueButton.onclick = () => (
+          active.mode === "exam"
+            ? this.resumeExam(active.session_id)
+            : this.resume(active.session_id)
+        );
+      }
+      const examButton = this.querySelector("#start-exam");
+      if (examButton) {
+        examButton.onclick = () => this.startExam(subjectId);
       }
       this.querySelector("#start-session").onclick = () => {
         const mode = this.querySelector("#study-mode").value;
@@ -537,6 +587,261 @@ class UnedStudyPanel extends HTMLElement {
     } catch (error) {
       this.renderError(error?.message || String(error));
     }
+  }
+
+  async startExam(subjectId) {
+    try {
+      this.renderLoading("Preparando simulacro…");
+      const state = await this.call("start_exam", {
+        subject_id: subjectId,
+      });
+      this.subjectId = subjectId;
+      this.sessionId = state.session_id;
+      this.examState = state;
+      await this.loadExamQuestion(state.current_index || 0);
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async resumeExam(sessionId) {
+    try {
+      this.renderLoading("Recuperando simulacro…");
+      const state = await this.call("exam_state", {
+        session_id: sessionId,
+      });
+      this.subjectId = state.subject_id;
+      this.sessionId = sessionId;
+      this.examState = state;
+      if (state.state !== "active" || state.expired) {
+        await this.finishExam(false);
+        return;
+      }
+      await this.loadExamQuestion(state.current_index || 0);
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async loadExamQuestion(index) {
+    try {
+      const data = await this.call("exam_question", {
+        session_id: this.sessionId,
+        index,
+      });
+      this.examQuestion = data;
+      if (!this.examState) {
+        this.examState = {};
+      }
+      this.examState.current_index = data.index;
+      this.examState.question_count = data.question_count;
+      this.examState.expires_at = data.expires_at;
+      this.renderExamQuestion(data);
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  formatExamTime(milliseconds) {
+    const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const rest = seconds % 60;
+    return hours
+      ? `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
+      : `${minutes}:${String(rest).padStart(2, "0")}`;
+  }
+
+  startExamClock(expiresAt) {
+    const tick = () => {
+      const clock = this.querySelector("#exam-clock");
+      if (!clock) {
+        return;
+      }
+      const remaining = new Date(expiresAt).getTime() - Date.now();
+      clock.textContent = this.formatExamTime(remaining);
+      if (remaining <= 0) {
+        clearInterval(this._examTimer);
+        this._examTimer = null;
+        this.finishExam(false);
+      }
+    };
+    tick();
+    this._examTimer = setInterval(tick, 1000);
+  }
+
+  renderExamQuestion(data) {
+    const item = data.item;
+    const index = data.index;
+    const total = data.question_count;
+    const selected = data.selected_answer;
+    const answered = this.examState?.answered_count || 0;
+
+    this.shell(`
+      <div class="top">
+        <button class="secondary" id="exit-exam">← Asignatura</button>
+        <h1>Simulacro</h1>
+      </div>
+      <div class="exam-bar">
+        <div>
+          <strong>Pregunta ${index + 1} de ${total}</strong>
+          <span class="muted"> · ${answered} respondidas</span>
+        </div>
+        <div class="exam-clock" id="exam-clock">--:--</div>
+      </div>
+      <div class="card">
+        ${this.md(item.question_md)}
+        <div class="answers">
+          ${item.answers.map((answer) => `
+            <button
+              class="${selected === answer.id ? "selected" : ""}"
+              data-exam-answer="${this.escape(answer.id)}">
+              ${this.md(answer.text_md)}
+            </button>
+          `).join("")}
+        </div>
+      </div>
+      <div class="actions" style="margin-top:16px">
+        <button class="secondary" id="exam-prev" ${index === 0 ? "disabled" : ""}>← Anterior</button>
+        <button class="secondary" id="exam-next" ${index >= total - 1 ? "disabled" : ""}>Siguiente →</button>
+        <button id="finish-exam">Entregar examen</button>
+      </div>
+    `);
+
+    this.querySelector("#exit-exam").onclick = () =>
+      this.openSubject(this.subjectId);
+    this.querySelectorAll("[data-exam-answer]").forEach((button) => {
+      button.onclick = () => this.selectExamAnswer(
+        item.id,
+        button.dataset.examAnswer,
+      );
+    });
+    this.querySelector("#exam-prev").onclick = () =>
+      this.loadExamQuestion(index - 1);
+    this.querySelector("#exam-next").onclick = () =>
+      this.loadExamQuestion(index + 1);
+    this.querySelector("#finish-exam").onclick = () =>
+      this.finishExam(true);
+
+    this.startExamClock(data.expires_at);
+  }
+
+  async selectExamAnswer(itemId, answerId) {
+    try {
+      const result = await this.call("exam_answer", {
+        session_id: this.sessionId,
+        item_id: itemId,
+        answer_id: answerId,
+      });
+      this.examState.answered_count = result.answered_count;
+      this.examQuestion.selected_answer = answerId;
+      this.renderExamQuestion(this.examQuestion);
+    } catch (error) {
+      if (String(error?.message || error).toLowerCase().includes("expired")) {
+        await this.finishExam(false);
+        return;
+      }
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async finishExam(confirmFirst = true) {
+    if (this._finishingExam) {
+      return;
+    }
+    if (
+      confirmFirst
+      && !window.confirm("¿Entregar el simulacro y ver la corrección?")
+    ) {
+      return;
+    }
+
+    this._finishingExam = true;
+    if (this._examTimer) {
+      clearInterval(this._examTimer);
+      this._examTimer = null;
+    }
+
+    try {
+      this.renderLoading("Corrigiendo simulacro…");
+      const result = await this.call("finish_exam", {
+        session_id: this.sessionId,
+      });
+      this.renderExamResults(result);
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    } finally {
+      this._finishingExam = false;
+    }
+  }
+
+  renderExamResults(result) {
+    const score = result.score || {};
+    const grade = Number(score.grade_10 || 0).toFixed(2);
+    const percentage = Number(score.percentage || 0).toFixed(1);
+    const review = (result.review || []).map((entry, index) => {
+      const item = entry.item;
+      const selected = entry.answer_id;
+      const answerRows = item.answers.map((answer) => {
+        let cls = "";
+        let suffix = "";
+        if (answer.id === item.correct_answer) {
+          cls = "correct";
+          suffix = " ✓ correcta";
+        } else if (answer.id === selected) {
+          cls = "wrong";
+          suffix = " ✗ tu respuesta";
+        }
+        return `
+          <div class="review-answer ${cls}">
+            ${this.md(answer.text_md)}
+            ${suffix ? `<span class="small muted">${this.escape(suffix)}</span>` : ""}
+          </div>`;
+      }).join("");
+
+      const state = entry.correct === true
+        ? "Correcta"
+        : entry.correct === false
+          ? "Incorrecta"
+          : "En blanco";
+      return `
+        <div class="card" style="margin-top:12px">
+          <div class="muted small">Pregunta ${index + 1} · ${state}</div>
+          ${this.md(item.question_md)}
+          ${answerRows}
+          ${item.explanation_md
+            ? `<hr>${this.md(item.explanation_md)}`
+            : ""}
+        </div>`;
+    }).join("");
+
+    this.shell(`
+      <div class="top">
+        <h1>Resultado del simulacro</h1>
+      </div>
+      <div class="card ${Number(score.grade_10 || 0) >= 5 ? "ok" : ""}">
+        <div class="stats">
+          <div class="stat"><span class="muted small">Nota /10</span><strong>${grade}</strong></div>
+          <div class="stat"><span class="muted small">Puntuación</span><strong>${percentage}%</strong></div>
+          <div class="stat"><span class="muted small">Correctas</span><strong>${score.correct || 0}</strong></div>
+          <div class="stat"><span class="muted small">Incorrectas</span><strong>${score.incorrect || 0}</strong></div>
+          <div class="stat"><span class="muted small">En blanco</span><strong>${score.blank || 0}</strong></div>
+        </div>
+        <p class="muted small">
+          Penalización por respuesta incorrecta: ${score.wrong_answer_penalty || 0}.
+        </p>
+        <div class="actions">
+          <button id="exam-results-subject">Volver a la asignatura</button>
+          <button class="secondary" id="exam-results-home">Asignaturas</button>
+        </div>
+      </div>
+      ${review}
+    `);
+
+    this.querySelector("#exam-results-subject").onclick = () =>
+      this.openSubject(this.subjectId);
+    this.querySelector("#exam-results-home").onclick = () =>
+      this.loadDashboard();
   }
 
   async start(subjectId, mode = "adaptive", topic = null) {
