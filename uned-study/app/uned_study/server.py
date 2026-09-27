@@ -906,6 +906,9 @@ async def asset(request: web.Request) -> web.FileResponse:
     response.headers["Cache-Control"] = "private, max-age=3600"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Content-Security-Policy"] = (
+        "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+    )
     return response
 
 
