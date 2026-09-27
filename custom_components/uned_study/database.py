@@ -372,6 +372,110 @@ class StudyDatabase:
         result["filters"] = json.loads(result.pop("filters_json"))
         return result
 
+    async def async_set_exam_answer(
+        self,
+        hass: HomeAssistant,
+        session_id: str,
+        user_id: str,
+        item_id: str,
+        answer_id: str,
+    ) -> dict[str, Any]:
+        """Persist one mock-exam answer inside the durable session payload."""
+        return await hass.async_add_executor_job(
+            self._set_exam_answer,
+            session_id,
+            user_id,
+            item_id,
+            answer_id,
+        )
+
+    def _set_exam_answer(
+        self,
+        session_id: str,
+        user_id: str,
+        item_id: str,
+        answer_id: str,
+    ) -> dict[str, Any]:
+        with self._lock, self._connect() as db:
+            row = db.execute(
+                """SELECT filters_json FROM study_sessions
+                   WHERE session_id=? AND user_id=?""",
+                (session_id, user_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError("study session not found")
+
+            filters = json.loads(row["filters_json"])
+            exam = filters.get("exam")
+            if not isinstance(exam, dict):
+                raise ValueError("study session has no exam state")
+            answers = exam.get("answers")
+            if not isinstance(answers, dict):
+                raise ValueError("exam answers are invalid")
+
+            answers[item_id] = answer_id
+            db.execute(
+                """UPDATE study_sessions
+                   SET filters_json=?,last_activity_at=?
+                   WHERE session_id=? AND user_id=?""",
+                (
+                    json.dumps(filters),
+                    _now(),
+                    session_id,
+                    user_id,
+                ),
+            )
+        return filters
+
+    async def async_set_exam_index(
+        self,
+        hass: HomeAssistant,
+        session_id: str,
+        user_id: str,
+        index: int,
+    ) -> dict[str, Any]:
+        """Persist the currently viewed mock-exam question index."""
+        return await hass.async_add_executor_job(
+            self._set_exam_index,
+            session_id,
+            user_id,
+            index,
+        )
+
+    def _set_exam_index(
+        self,
+        session_id: str,
+        user_id: str,
+        index: int,
+    ) -> dict[str, Any]:
+        with self._lock, self._connect() as db:
+            row = db.execute(
+                """SELECT filters_json FROM study_sessions
+                   WHERE session_id=? AND user_id=?""",
+                (session_id, user_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError("study session not found")
+
+            filters = json.loads(row["filters_json"])
+            exam = filters.get("exam")
+            if not isinstance(exam, dict):
+                raise ValueError("study session has no exam state")
+
+            exam["current_index"] = index
+            db.execute(
+                """UPDATE study_sessions
+                   SET filters_json=?,last_activity_at=?
+                   WHERE session_id=? AND user_id=?""",
+                (
+                    json.dumps(filters),
+                    _now(),
+                    session_id,
+                    user_id,
+                ),
+            )
+        return filters
+
     async def async_complete_session(
         self,
         hass: HomeAssistant,
