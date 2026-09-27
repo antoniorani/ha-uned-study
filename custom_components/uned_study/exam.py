@@ -135,6 +135,7 @@ def build_exam_filters(
         "exam": {
             "item_ids": [item.id for item in selected],
             "answers": {},
+            "current_index": 0,
             "started_at": started.isoformat(),
             "expires_at": (
                 started + timedelta(minutes=duration)
