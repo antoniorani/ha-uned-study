@@ -21,6 +21,7 @@ from .const import (
 from .content.manager import ContentManager
 from .content.sync import ContentSyncError, GitHubContentSynchronizer
 from .database import StudyDatabase
+from .exam_api import async_register_exam_commands
 from .panel import (
     async_register_panel,
     async_register_static_assets,
@@ -39,6 +40,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         Path(hass.config.path(DATA_DIRECTORY)) / CONTENT_DIRECTORY
     )
     async_register_websocket_commands(hass)
+    async_register_exam_commands(hass)
     async_register_content_sync_commands(hass)
     async_register_asset_view(hass, content_dir)
     await async_register_static_assets(hass)
