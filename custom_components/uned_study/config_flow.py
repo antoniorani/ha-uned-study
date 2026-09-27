@@ -15,6 +15,7 @@ from .const import (
     DOMAIN,
     NAME,
 )
+from .content.sync import parse_github_repository
 
 
 class UNEDStudyConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -30,19 +31,55 @@ class UNEDStudyConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title=NAME, data=user_input)
+            try:
+                parse_github_repository(
+                    user_input[CONF_CONTENT_REPOSITORY]
+                )
+            except ValueError:
+                errors["base"] = "invalid_repository"
+
+            if not user_input[CONF_CONTENT_BRANCH].strip():
+                errors["base"] = "invalid_branch"
+
+            if not errors:
+                user_input[CONF_CONTENT_BRANCH] = (
+                    user_input[CONF_CONTENT_BRANCH].strip()
+                )
+                return self.async_create_entry(
+                    title=NAME,
+                    data=user_input,
+                )
 
         schema = probatio.Schema(
             {
                 probatio.Required(
                     CONF_CONTENT_REPOSITORY,
-                    default=DEFAULT_CONTENT_REPOSITORY,
+                    default=(
+                        user_input.get(
+                            CONF_CONTENT_REPOSITORY,
+                            DEFAULT_CONTENT_REPOSITORY,
+                        )
+                        if user_input
+                        else DEFAULT_CONTENT_REPOSITORY
+                    ),
                 ): str,
                 probatio.Required(
                     CONF_CONTENT_BRANCH,
-                    default=DEFAULT_CONTENT_BRANCH,
+                    default=(
+                        user_input.get(
+                            CONF_CONTENT_BRANCH,
+                            DEFAULT_CONTENT_BRANCH,
+                        )
+                        if user_input
+                        else DEFAULT_CONTENT_BRANCH
+                    ),
                 ): str,
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+        )
