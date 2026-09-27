@@ -12,7 +12,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN, WS_PREFIX
-from .content.models import Flashcard, TestQuestion
+from .content.models import Flashcard, Subject, TestQuestion
 from .runtime import UNEDStudyRuntime
 from .scheduler import (
     ProgressSnapshot,
@@ -35,6 +35,84 @@ def _send_not_loaded(
     connection.send_error(
         message_id, "not_loaded", "UNED Study is not loaded"
     )
+
+
+def _subject_statistics(
+    subject: Subject,
+    progress: dict[str, ProgressSnapshot],
+) -> dict[str, Any]:
+    """Build overall and per-topic study statistics."""
+    now = datetime.now(timezone.utc)
+    topic_stats: dict[str, dict[str, Any]] = {
+        topic.id: {
+            "id": topic.id,
+            "title": topic.title,
+            "total": 0,
+            "studied": 0,
+            "new": 0,
+            "reviews": 0,
+            "correct": 0,
+            "incorrect": 0,
+            "due": 0,
+            "_mastery_sum": 0.0,
+        }
+        for topic in subject.topics
+    }
+    overall = {
+        "total": len(subject.items),
+        "studied": 0,
+        "new": 0,
+        "reviews": 0,
+        "correct": 0,
+        "incorrect": 0,
+        "due": 0,
+        "_mastery_sum": 0.0,
+    }
+
+    for item in subject.items:
+        topic = topic_stats[item.topic]
+        topic["total"] += 1
+        item_progress = progress.get(item.id)
+        if item_progress is None or item_progress.times_seen == 0:
+            topic["new"] += 1
+            overall["new"] += 1
+            continue
+
+        topic["studied"] += 1
+        overall["studied"] += 1
+        topic["reviews"] += item_progress.times_seen
+        overall["reviews"] += item_progress.times_seen
+        topic["correct"] += item_progress.correct_count
+        overall["correct"] += item_progress.correct_count
+        topic["incorrect"] += item_progress.incorrect_count
+        overall["incorrect"] += item_progress.incorrect_count
+        topic["_mastery_sum"] += item_progress.mastery
+        overall["_mastery_sum"] += item_progress.mastery
+
+        due = item_progress.next_review_at
+        if due is not None and due <= now:
+            topic["due"] += 1
+            overall["due"] += 1
+
+    def finalize(stats: dict[str, Any]) -> dict[str, Any]:
+        attempts = stats["correct"] + stats["incorrect"]
+        studied = stats["studied"]
+        stats["accuracy"] = (
+            stats["correct"] / attempts if attempts else None
+        )
+        stats["mastery"] = (
+            stats["_mastery_sum"] / studied if studied else 0.0
+        )
+        stats.pop("_mastery_sum", None)
+        return stats
+
+    return {
+        "overall": finalize(overall),
+        "topics": [
+            finalize(topic_stats[topic.id])
+            for topic in subject.topics
+        ],
+    }
 
 
 def _serialize_item(
@@ -184,6 +262,13 @@ async def ws_subject(
         )
         return
 
+    progress = await runtime.database.async_get_progress_map(
+        hass,
+        connection.user.id,
+        subject.id,
+    )
+    statistics = _subject_statistics(subject, progress)
+
     connection.send_result(
         msg["id"],
         {
@@ -194,6 +279,7 @@ async def ws_subject(
             "topics": [asdict(topic) for topic in subject.topics],
             "exam": subject.exam,
             "item_count": len(subject.items),
+            "statistics": statistics,
         },
     )
 
