@@ -1,0 +1,10 @@
+configuration:
+  content_repository:
+    name: Repositorio de contenidos
+    description: Repositorio público de GitHub que contiene las asignaturas de UNED Study.
+  content_branch:
+    name: Rama de contenidos
+    description: Rama Git utilizada para el material de estudio.
+  sync_interval_hours:
+    name: Intervalo de sincronización
+    description: Horas entre comprobaciones automáticas de contenido.
