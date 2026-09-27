@@ -397,6 +397,15 @@ async def ws_next_item(
         )
         return
 
+    if session["current_item_id"]:
+        current = subject.items_by_id.get(session["current_item_id"])
+        if current is not None:
+            connection.send_result(
+                msg["id"],
+                {"item": _serialize_item(current)},
+            )
+            return
+
     progress = await runtime.database.async_get_progress_map(
         hass, connection.user.id, subject.id
     )
