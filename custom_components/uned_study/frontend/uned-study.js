@@ -24,18 +24,48 @@ class UnedStudyPanel extends HTMLElement {
       .replaceAll("'", "&#039;");
   }
 
+  rewriteAssetLinks(value = "") {
+    if (!this.subjectId) {
+      return String(value);
+    }
+    const base = `/api/uned_study/assets/${encodeURIComponent(this.subjectId)}/`;
+    return String(value).replace(
+      /\]\(assets\/([^\s)]+)\)/g,
+      (_match, path) => {
+        const safePath = path
+          .split("/")
+          .map((part) => encodeURIComponent(part))
+          .join("/");
+        return `](${base}${safePath})`;
+      },
+    );
+  }
+
   md(value = "") {
-    let text = this.escape(value);
-    text = text.replace(/^### (.*)$/gm, "<h3>$1</h3>");
-    text = text.replace(/^## (.*)$/gm, "<h2>$1</h2>");
-    text = text.replace(/^# (.*)$/gm, "<h1>$1</h1>");
-    text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    text = text.replace(/\*(.+?)\*/g, "<em>$1</em>");
-    text = text.replace(/\`(.+?)\`/g, "<code>$1</code>");
-    return text.replace(/\n/g, "<br>");
+    this._pendingMarkdown ??= new Map();
+    this._markdownSequence = (this._markdownSequence || 0) + 1;
+    const key = `md-${this._markdownSequence}`;
+    this._pendingMarkdown.set(key, this.rewriteAssetLinks(value));
+    return `<ha-markdown class="markdown" data-md-key="${key}" breaks></ha-markdown>`;
+  }
+
+  hydrateMarkdown(markdown) {
+    const apply = () => {
+      this.querySelectorAll("ha-markdown[data-md-key]").forEach((element) => {
+        const value = markdown.get(element.dataset.mdKey) || "";
+        element.content = value;
+      });
+    };
+    if (customElements.get("ha-markdown")) {
+      apply();
+    } else {
+      customElements.whenDefined("ha-markdown").then(apply);
+    }
   }
 
   shell(body) {
+    const markdown = this._pendingMarkdown || new Map();
+    this._pendingMarkdown = new Map();
     this.innerHTML = `
       <style>
         :host {
@@ -46,8 +76,8 @@ class UnedStudyPanel extends HTMLElement {
           font-family: var(--paper-font-body1_-_font-family, sans-serif);
         }
         .page { max-width: 1000px; margin: 0 auto; padding: 24px; }
-        .top { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
-        .top h1 { margin:0; flex:1; }
+        .top { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+        .top h1 { margin:0; flex:1; min-width:180px; }
         .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
         .card {
           background: var(--card-background-color);
@@ -58,20 +88,25 @@ class UnedStudyPanel extends HTMLElement {
         button {
           border:0; border-radius:10px; padding:10px 14px;
           cursor:pointer; background:var(--primary-color); color:white;
+          font: inherit;
         }
+        button[disabled] { opacity:.55; cursor:wait; }
         button.secondary {
           background:transparent; color:var(--primary-text-color);
           border:1px solid var(--divider-color);
         }
         .star { background:transparent; color:var(--warning-color); font-size:22px; padding:4px; }
         .muted { color:var(--secondary-text-color); }
+        .small { font-size:.88rem; }
         .answers { display:grid; gap:10px; margin-top:18px; }
         .answers button { text-align:left; }
+        .answers ha-markdown { pointer-events:none; }
         .rating { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:18px; }
         .error { border-left:4px solid var(--error-color); }
         .ok { border-left:4px solid var(--success-color, green); }
-        .markdown table { border-collapse:collapse; }
-        .markdown td,.markdown th { border:1px solid var(--divider-color); padding:6px; }
+        .source { margin-bottom:16px; }
+        .markdown { display:block; }
+        .markdown img { max-width:100%; height:auto; }
         @media(max-width:600px) {
           .page { padding:14px; }
           .rating { grid-template-columns:repeat(2,1fr); }
@@ -79,31 +114,41 @@ class UnedStudyPanel extends HTMLElement {
       </style>
       <div class="page">${body}</div>
     `;
+    this.hydrateMarkdown(markdown);
   }
 
-  renderLoading() {
-    this.shell("<div class='card'>Cargando UNED Study…</div>");
+  renderLoading(message = "Cargando UNED Study…") {
+    this.shell(`<div class="card">${this.escape(message)}</div>`);
   }
 
   renderError(error) {
     this.shell(`
-      <div class="top"><h1>UNED Study</h1></div>
+      <div class="top">
+        <h1>UNED Study</h1>
+        <button class="secondary" id="back-dashboard">Volver</button>
+      </div>
       <div class="card error"><strong>Error</strong><br>${this.escape(error)}</div>
     `);
+    this.querySelector("#back-dashboard").onclick = () => this.loadDashboard();
   }
 
   async loadDashboard() {
     try {
-      const data = await this.call("dashboard");
+      const [data, status] = await Promise.all([
+        this.call("dashboard"),
+        this.call("content_status"),
+      ]);
       this.dashboard = data;
+      this.contentStatus = status;
+
       const cards = data.subjects.length
         ? data.subjects.map((subject) => this.subjectCard(subject)).join("")
         : `
           <div class="card">
             <h2>No hay asignaturas</h2>
             <p class="muted">
-              Añade subject.json a /config/uned_study/content/&lt;subject_id&gt;/
-              y recarga el contenido.
+              Todavía no hay un snapshot válido de asignaturas en la caché local.
+              Un administrador puede sincronizar el repositorio configurado.
             </p>
           </div>`;
 
@@ -116,16 +161,44 @@ class UnedStudyPanel extends HTMLElement {
            </div>`
         : "";
 
+      const source = status.source || {};
+      const sourceInfo = `
+        <div class="card source">
+          <div><strong>Contenido:</strong>
+            ${this.escape(source.repository || "sin configurar")}
+            @ ${this.escape(source.branch || "")}
+          </div>
+          <div class="muted small">
+            ${source.last_sync
+              ? `Última sincronización: ${this.escape(source.last_sync.synced_at)} · ${source.last_sync.subject_count} asignaturas`
+              : "Todavía no hay una sincronización confirmada en esta ejecución."}
+          </div>
+          ${source.last_error
+            ? `<div class="small" style="color:var(--error-color)">${this.escape(source.last_error)}</div>`
+            : ""}
+        </div>`;
+
+      const syncButton = this._hass?.user?.is_admin
+        ? `<button id="sync-content">Sincronizar GitHub</button>`
+        : "";
+
       this.shell(`
         <div class="top">
           <h1>UNED Study</h1>
+          ${syncButton}
           <button class="secondary" id="refresh">Actualizar</button>
         </div>
+        ${sourceInfo}
         <div class="grid">${cards}</div>
         <div style="height:16px"></div>
         ${adminErrors}
       `);
+
       this.querySelector("#refresh").onclick = () => this.loadDashboard();
+      const sync = this.querySelector("#sync-content");
+      if (sync) {
+        sync.onclick = () => this.syncContent(sync);
+      }
       this.querySelectorAll("[data-favorite]").forEach((button) => {
         button.onclick = () => this.toggleFavorite(button.dataset.favorite);
       });
@@ -133,6 +206,20 @@ class UnedStudyPanel extends HTMLElement {
         button.onclick = () => this.start(button.dataset.study);
       });
     } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async syncContent(button) {
+    const oldText = button.textContent;
+    button.disabled = true;
+    button.textContent = "Sincronizando…";
+    try {
+      await this.call("sync_content");
+      await this.loadDashboard();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = oldText;
       this.renderError(error?.message || String(error));
     }
   }
@@ -181,6 +268,7 @@ class UnedStudyPanel extends HTMLElement {
         subject_id: subjectId,
         mode: "adaptive",
       });
+      this.subjectId = subjectId;
       this.sessionId = data.session_id;
       this.subjectType = data.subject_type;
       await this.nextItem();
@@ -214,7 +302,7 @@ class UnedStudyPanel extends HTMLElement {
       </div>
       <div class="card">
         <div class="muted">Importancia ${item.importance}/5</div>
-        <div class="markdown">${this.md(item.question_md)}</div>
+        ${this.md(item.question_md)}
         <div class="answers">
           ${item.answers.map((answer) => `
             <button data-answer="${this.escape(answer.id)}">
@@ -243,7 +331,7 @@ class UnedStudyPanel extends HTMLElement {
       <div class="top"><h1>Resultado</h1></div>
       <div class="card ${result.correct ? "ok" : "error"}">
         <h2>${result.correct ? "Correcta" : "Incorrecta"}</h2>
-        <div class="markdown">${this.md(item.explanation_md || "")}</div>
+        ${this.md(item.explanation_md || "")}
         <p class="muted">Próximo repaso: ${this.escape(result.next_review_at || "")}</p>
         <button id="next">Siguiente</button>
       </div>
@@ -259,11 +347,11 @@ class UnedStudyPanel extends HTMLElement {
       </div>
       <div class="card">
         <div class="muted">Importancia ${item.importance}/5</div>
-        <div class="markdown">${this.md(item.front_md)}</div>
+        ${this.md(item.front_md)}
         ${revealed ? `
           <hr>
-          <div class="markdown">${this.md(item.back_md)}</div>
-          ${item.mnemonic_md ? `<p class="markdown">${this.md(item.mnemonic_md)}</p>` : ""}
+          ${this.md(item.back_md)}
+          ${item.mnemonic_md ? this.md(item.mnemonic_md) : ""}
           <div class="rating">
             <button data-rate="again">Otra vez</button>
             <button data-rate="hard">Difícil</button>
@@ -271,7 +359,7 @@ class UnedStudyPanel extends HTMLElement {
             <button data-rate="easy">Fácil</button>
           </div>
         ` : `
-          ${item.hint_md ? `<p class="muted markdown">${this.md(item.hint_md)}</p>` : ""}
+          ${item.hint_md ? `<div class="muted">${this.md(item.hint_md)}</div>` : ""}
           <button id="reveal">Mostrar respuesta</button>
         `}
       </div>
