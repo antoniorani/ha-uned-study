@@ -4,12 +4,16 @@
     "step": {
       "user": {
         "title": "Configure UNED Study",
-        "description": "Configure the repository that will provide subject content. Synchronization will be handled by the integration.",
+        "description": "Configure the GitHub repository that provides subject content.",
         "data": {
           "content_repository": "Content repository",
           "content_branch": "Content branch"
         }
       }
+    },
+    "error": {
+      "invalid_repository": "Enter a valid public github.com repository.",
+      "invalid_branch": "The content branch cannot be empty."
     },
     "abort": {
       "already_configured": "UNED Study is already configured."
