@@ -51,6 +51,14 @@ jobs:
               assert "custom_components/uned_study/frontend/uned-study.js" in names
           PY
 
+      - name: Upload alpha install package
+        uses: actions/upload-artifact@v4
+        with:
+          name: uned-study-alpha
+          path: dist/uned-study-ci.zip
+          if-no-files-found: error
+          retention-days: 14
+
   compatibility:
     runs-on: ubuntu-latest
     steps:
