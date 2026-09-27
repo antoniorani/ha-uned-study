@@ -91,6 +91,11 @@ jobs:
             http://127.0.0.1:18099/api/dashboard \
             | grep -q '"subjects"'
 
+          curl --fail \
+            -H 'X-Ingress-Path: /api/hassio_ingress/test-token' \
+            http://127.0.0.1:18099/ \
+            | grep -q '<base href="/api/hassio_ingress/test-token/">'
+
   repository-discovery:
     runs-on: ubuntu-latest
     steps:
