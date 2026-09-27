@@ -2,9 +2,7 @@
   "use strict";
 
   const root = document.getElementById("app");
-  const basePath = window.location.pathname.endsWith("/")
-    ? window.location.pathname
-    : window.location.pathname + "/";
+  const basePath = new URL(".", document.baseURI).pathname;
 
   const state = {
     dashboard: null,
