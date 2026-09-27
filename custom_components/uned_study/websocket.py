@@ -477,6 +477,13 @@ async def ws_next_item(
         )
         return
     runtime, session, subject = loaded
+    if session["mode"] == "exam":
+        connection.send_error(
+            msg["id"],
+            "wrong_mode",
+            "Mock exams use the dedicated exam API",
+        )
+        return
     if session["state"] != "active":
         connection.send_error(
             msg["id"], "inactive_session", "Study session is not active"
