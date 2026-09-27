@@ -96,6 +96,16 @@ class UnedStudyPanel extends HTMLElement {
           border:1px solid var(--divider-color);
         }
         .star { background:transparent; color:var(--warning-color); font-size:22px; padding:4px; }
+        .mini { padding:5px 8px; min-width:34px; }
+        .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .study-options { display:grid; gap:14px; max-width:620px; }
+        label { display:grid; gap:6px; font-weight:500; }
+        select {
+          width:100%; box-sizing:border-box; padding:10px 12px;
+          border-radius:10px; border:1px solid var(--divider-color);
+          color:var(--primary-text-color); background:var(--card-background-color);
+          font:inherit;
+        }
         .muted { color:var(--secondary-text-color); }
         .small { font-size:.88rem; }
         .answers { display:grid; gap:10px; margin-top:18px; }
@@ -202,8 +212,17 @@ class UnedStudyPanel extends HTMLElement {
       this.querySelectorAll("[data-favorite]").forEach((button) => {
         button.onclick = () => this.toggleFavorite(button.dataset.favorite);
       });
-      this.querySelectorAll("[data-study]").forEach((button) => {
-        button.onclick = () => this.start(button.dataset.study);
+      this.querySelectorAll("[data-open]").forEach((button) => {
+        button.onclick = () => this.openSubject(button.dataset.open);
+      });
+      this.querySelectorAll("[data-resume]").forEach((button) => {
+        button.onclick = () => this.resume(button.dataset.resume);
+      });
+      this.querySelectorAll("[data-move]").forEach((button) => {
+        button.onclick = () => this.moveFavorite(
+          button.dataset.subject,
+          Number(button.dataset.move),
+        );
       });
     } catch (error) {
       this.renderError(error?.message || String(error));
@@ -224,12 +243,32 @@ class UnedStudyPanel extends HTMLElement {
     }
   }
 
+  modeLabel(mode) {
+    return {
+      adaptive: "Adaptativo",
+      due: "Repaso vencido",
+      errors: "Falladas",
+      new: "Nuevas",
+      important: "Importantes",
+    }[mode] || mode;
+  }
+
   subjectCard(subject) {
     const progress = subject.progress || {};
     const total = (progress.correct || 0) + (progress.incorrect || 0);
     const accuracy = total
       ? Math.round((100 * (progress.correct || 0)) / total)
       : 0;
+    const active = subject.active_session;
+    const favoriteControls = subject.favorite
+      ? `
+        <button class="secondary mini" data-move="-1"
+          data-subject="${this.escape(subject.id)}" title="Subir favorito">↑</button>
+        <button class="secondary mini" data-move="1"
+          data-subject="${this.escape(subject.id)}" title="Bajar favorito">↓</button>
+      `
+      : "";
+
     return `
       <div class="card">
         <div style="display:flex;align-items:start;gap:8px">
@@ -241,14 +280,31 @@ class UnedStudyPanel extends HTMLElement {
               · ${subject.topic_count} temas
             </div>
           </div>
-          <button class="star" data-favorite="${this.escape(subject.id)}"
-            title="Favorito">${subject.favorite ? "★" : "☆"}</button>
+          <div class="actions">
+            ${favoriteControls}
+            <button class="star" data-favorite="${this.escape(subject.id)}"
+              title="Favorito">${subject.favorite ? "★" : "☆"}</button>
+          </div>
         </div>
         <p>
           Revisiones: <strong>${progress.reviews || 0}</strong>
           · Acierto: <strong>${accuracy}%</strong>
         </p>
-        <button data-study="${this.escape(subject.id)}">Estudiar</button>
+        ${active ? `
+          <p class="muted small">
+            Sesión activa · ${this.escape(this.modeLabel(active.mode))}
+            · ${active.answered_count} respondidas
+          </p>
+        ` : ""}
+        <div class="actions">
+          ${active
+            ? `<button data-resume="${this.escape(active.session_id)}">Continuar</button>`
+            : ""}
+          <button class="${active ? "secondary" : ""}"
+            data-open="${this.escape(subject.id)}">
+            ${active ? "Opciones" : "Estudiar"}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -262,12 +318,133 @@ class UnedStudyPanel extends HTMLElement {
     await this.loadDashboard();
   }
 
-  async start(subjectId) {
+  async moveFavorite(subjectId, delta) {
+    const favorites = this.dashboard.subjects
+      .filter((subject) => subject.favorite)
+      .map((subject) => subject.id);
+    const index = favorites.indexOf(subjectId);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= favorites.length) {
+      return;
+    }
+    [favorites[index], favorites[target]] = [
+      favorites[target],
+      favorites[index],
+    ];
+    await this.call("reorder_favorites", { subject_ids: favorites });
+    await this.loadDashboard();
+  }
+
+  async openSubject(subjectId) {
     try {
-      const data = await this.call("start_session", {
-        subject_id: subjectId,
-        mode: "adaptive",
+      this.subjectId = subjectId;
+      const subject = await this.call("subject", { subject_id: subjectId });
+      this.subjectMeta = subject;
+      const summary = this.dashboard?.subjects.find(
+        (item) => item.id === subjectId,
+      );
+      const active = summary?.active_session || null;
+      const topicOptions = subject.topics
+        .map(
+          (topic) => `
+            <option value="${this.escape(topic.id)}">
+              ${this.escape(topic.title)}
+            </option>`,
+        )
+        .join("");
+
+      this.shell(`
+        <div class="top">
+          <button class="secondary" id="back-dashboard">← Asignaturas</button>
+          <h1>${this.escape(subject.title)}</h1>
+        </div>
+        ${active ? `
+          <div class="card ok" style="margin-bottom:16px">
+            <h2 style="margin-top:0">Sesión en curso</h2>
+            <p>
+              ${this.escape(this.modeLabel(active.mode))}
+              · ${active.answered_count} respondidas
+            </p>
+            <button id="continue-session">Continuar sesión</button>
+          </div>
+        ` : ""}
+        <div class="card">
+          <h2 style="margin-top:0">Nueva sesión</h2>
+          <div class="study-options">
+            <label>
+              Modo de estudio
+              <select id="study-mode">
+                <option value="adaptive">Adaptativo</option>
+                <option value="due">Repaso vencido</option>
+                <option value="errors">Falladas anteriormente</option>
+                <option value="new">Solo nuevas</option>
+                <option value="important">Importantes (4–5)</option>
+              </select>
+            </label>
+            <label>
+              Tema
+              <select id="study-topic">
+                <option value="">Todos los temas</option>
+                ${topicOptions}
+              </select>
+            </label>
+            <div class="muted small">
+              Empezar una nueva sesión deja la anterior de esta asignatura
+              en pausa, sin borrar ningún progreso.
+            </div>
+            <div><button id="start-session">Empezar</button></div>
+          </div>
+        </div>
+      `);
+
+      this.querySelector("#back-dashboard").onclick = () => this.loadDashboard();
+      const continueButton = this.querySelector("#continue-session");
+      if (continueButton) {
+        continueButton.onclick = () => this.resume(active.session_id);
+      }
+      this.querySelector("#start-session").onclick = () => {
+        const mode = this.querySelector("#study-mode").value;
+        const topic = this.querySelector("#study-topic").value || null;
+        this.start(subjectId, mode, topic);
+      };
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async resume(sessionId) {
+    try {
+      const data = await this.call("resume_session", {
+        session_id: sessionId,
       });
+      this.subjectId = data.subject_id;
+      this.sessionId = data.session_id;
+      this.subjectType = data.subject_type;
+      this.currentItem = data.item || null;
+      this.itemStarted = performance.now();
+
+      if (!data.item) {
+        await this.nextItem();
+      } else if (data.item.type === "test") {
+        this.renderTest(data.item);
+      } else {
+        this.renderFlashcard(data.item, false);
+      }
+    } catch (error) {
+      this.renderError(error?.message || String(error));
+    }
+  }
+
+  async start(subjectId, mode = "adaptive", topic = null) {
+    try {
+      const payload = {
+        subject_id: subjectId,
+        mode,
+      };
+      if (topic) {
+        payload.topic = topic;
+      }
+      const data = await this.call("start_session", payload);
       this.subjectId = subjectId;
       this.sessionId = data.session_id;
       this.subjectType = data.subject_type;
@@ -311,7 +488,7 @@ class UnedStudyPanel extends HTMLElement {
         </div>
       </div>
     `);
-    this.querySelector("#back").onclick = () => this.loadDashboard();
+    this.querySelector("#back").onclick = () => this.openSubject(this.subjectId);
     this.querySelectorAll("[data-answer]").forEach((button) => {
       button.onclick = () => this.submitAnswer(button.dataset.answer);
     });
@@ -364,7 +541,7 @@ class UnedStudyPanel extends HTMLElement {
         `}
       </div>
     `);
-    this.querySelector("#back").onclick = () => this.loadDashboard();
+    this.querySelector("#back").onclick = () => this.openSubject(this.subjectId);
     if (!revealed) {
       this.querySelector("#reveal").onclick = () => this.renderFlashcard(item, true);
     } else {
