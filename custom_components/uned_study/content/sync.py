@@ -126,8 +126,8 @@ class GitHubContentSynchronizer:
 
     async def async_sync(self, hass: HomeAssistant) -> SyncReport:
         """Synchronize content without replacing active data until validation passes."""
-        archive = await self._async_download(hass)
         try:
+            archive = await self._async_download(hass)
             report = await hass.async_add_executor_job(
                 self._install_archive, archive
             )
@@ -224,8 +224,14 @@ class GitHubContentSynchronizer:
                     active_moved = False
                 raise
 
+            active_moved = False
             if backup_dir.exists():
-                shutil.rmtree(backup_dir)
+                try:
+                    shutil.rmtree(backup_dir)
+                except OSError as exc:
+                    _LOGGER.warning(
+                        "Could not remove old content backup: %s", exc
+                    )
 
             return SyncReport(
                 repository=self.repository.slug,
@@ -251,6 +257,8 @@ class GitHubContentSynchronizer:
         destination: Path,
     ) -> None:
         expanded = 0
+        member_count = 0
+        seen_paths: set[PurePosixPath] = set()
         seen_subject_file = False
 
         with tarfile.open(
@@ -258,6 +266,11 @@ class GitHubContentSynchronizer:
             mode="r:gz",
         ) as tar:
             for member in tar:
+                member_count += 1
+                if member_count > 20_000:
+                    raise ContentSyncError(
+                        "Archive contains too many entries"
+                    )
                 if member.isdir():
                     continue
                 if not member.isfile():
@@ -297,6 +310,12 @@ class GitHubContentSynchronizer:
                     raise ContentSyncError(
                         "Expanded content exceeds the configured size limit"
                     )
+
+                if relative in seen_paths:
+                    raise ContentSyncError(
+                        f"Duplicate archive path: {relative}"
+                    )
+                seen_paths.add(relative)
 
                 target = destination.joinpath(*relative.parts)
                 target.parent.mkdir(parents=True, exist_ok=True)
