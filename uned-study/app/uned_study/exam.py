@@ -23,9 +23,21 @@ def build_exam_state(
     if not questions:
         raise ValueError("subject has no test questions")
 
-    count = subject.exam.get("questions", len(questions))
-    duration = subject.exam.get("duration_minutes", 60)
-    penalty = subject.exam.get("wrong_answer_penalty", 0.0)
+    if not all(
+        key in subject.exam
+        for key in (
+            "questions",
+            "duration_minutes",
+            "wrong_answer_penalty",
+        )
+    ):
+        raise ValueError(
+            "mock exam requires explicit questions, duration and penalty metadata"
+        )
+
+    count = subject.exam["questions"]
+    duration = subject.exam["duration_minutes"]
+    penalty = subject.exam["wrong_answer_penalty"]
 
     if not isinstance(count, int) or isinstance(count, bool) or count < 1:
         raise ValueError("exam.questions must be a positive integer")
