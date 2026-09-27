@@ -34,3 +34,33 @@ jobs:
           python -m json.tool custom_components/uned_study/translations/en.json > /dev/null
           python -m json.tool custom_components/uned_study/translations/es.json > /dev/null
           python -m json.tool hacs.json > /dev/null
+
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install current Home Assistant
+        run: python -m pip install --disable-pip-version-check "homeassistant==2026.9.3"
+
+      - name: Import integration against Home Assistant
+        run: |
+          python - <<'PY'
+          from custom_components.uned_study.assets import UNEDStudyAssetView
+          from custom_components.uned_study.config_flow import UNEDStudyConfigFlow
+          from custom_components.uned_study.content.sync import parse_github_repository
+          from custom_components.uned_study.websocket import STUDY_MODES
+
+          assert UNEDStudyAssetView.requires_auth is True
+          assert UNEDStudyConfigFlow.VERSION == 1
+          assert parse_github_repository(
+              "https://github.com/antoniorani/uned-study-content"
+          ).slug == "antoniorani/uned-study-content"
+          assert "adaptive" in STUDY_MODES
+          PY
