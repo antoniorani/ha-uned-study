@@ -9,6 +9,14 @@
           "content_repository": "Repositorio de contenidos",
           "content_branch": "Rama de contenidos"
         }
+      },
+      "reconfigure": {
+        "title": "Cambiar origen de contenidos",
+        "description": "Cambia el repositorio GitHub o la rama. El progreso de estudio se conserva localmente y no se elimina.",
+        "data": {
+          "content_repository": "Repositorio de contenidos",
+          "content_branch": "Rama de contenidos"
+        }
       }
     },
     "error": {
@@ -16,7 +24,8 @@
       "invalid_branch": "La rama de contenidos no puede estar vacía."
     },
     "abort": {
-      "already_configured": "UNED Study ya está configurado."
+      "already_configured": "UNED Study ya está configurado.",
+      "reconfigure_successful": "El origen de contenidos se ha actualizado correctamente."
     }
   }
 }
