@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-import probatio
+import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
@@ -85,7 +85,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
 
 
 @websocket_api.websocket_command(
-    {probatio.Required("type"): f"{WS_PREFIX}/dashboard"}
+    {vol.Required("type"): f"{WS_PREFIX}/dashboard"}
 )
 @websocket_api.ws_require_user()
 @websocket_api.async_response
@@ -161,8 +161,8 @@ async def ws_dashboard(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/subject",
-        probatio.Required("subject_id"): str,
+        vol.Required("type"): f"{WS_PREFIX}/subject",
+        vol.Required("subject_id"): str,
     }
 )
 @websocket_api.ws_require_user()
@@ -200,12 +200,12 @@ async def ws_subject(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/start_session",
-        probatio.Required("subject_id"): str,
-        probatio.Optional("mode", default="adaptive"): probatio.In(
+        vol.Required("type"): f"{WS_PREFIX}/start_session",
+        vol.Required("subject_id"): str,
+        vol.Optional("mode", default="adaptive"): vol.In(
             STUDY_MODES
         ),
-        probatio.Optional("topic"): str,
+        vol.Optional("topic"): str,
     }
 )
 @websocket_api.ws_require_user()
@@ -257,8 +257,8 @@ async def ws_start_session(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/resume_session",
-        probatio.Required("session_id"): str,
+        vol.Required("type"): f"{WS_PREFIX}/resume_session",
+        vol.Required("session_id"): str,
     }
 )
 @websocket_api.ws_require_user()
@@ -371,8 +371,8 @@ def _eligible_items(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/next_item",
-        probatio.Required("session_id"): str,
+        vol.Required("type"): f"{WS_PREFIX}/next_item",
+        vol.Required("session_id"): str,
     }
 )
 @websocket_api.ws_require_user()
@@ -428,12 +428,12 @@ async def ws_next_item(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/submit_answer",
-        probatio.Required("session_id"): str,
-        probatio.Required("item_id"): str,
-        probatio.Required("answer_id"): str,
-        probatio.Required("request_id"): str,
-        probatio.Optional("response_ms"): int,
+        vol.Required("type"): f"{WS_PREFIX}/submit_answer",
+        vol.Required("session_id"): str,
+        vol.Required("item_id"): str,
+        vol.Required("answer_id"): str,
+        vol.Required("request_id"): str,
+        vol.Optional("response_ms"): int,
     }
 )
 @websocket_api.ws_require_user()
@@ -520,14 +520,14 @@ async def ws_submit_answer(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/rate_card",
-        probatio.Required("session_id"): str,
-        probatio.Required("item_id"): str,
-        probatio.Required("rating"): probatio.In(
+        vol.Required("type"): f"{WS_PREFIX}/rate_card",
+        vol.Required("session_id"): str,
+        vol.Required("item_id"): str,
+        vol.Required("rating"): vol.In(
             ["again", "hard", "good", "easy"]
         ),
-        probatio.Required("request_id"): str,
-        probatio.Optional("response_ms"): int,
+        vol.Required("request_id"): str,
+        vol.Optional("response_ms"): int,
     }
 )
 @websocket_api.ws_require_user()
@@ -599,9 +599,9 @@ async def ws_rate_card(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/set_favorite",
-        probatio.Required("subject_id"): str,
-        probatio.Required("favorite"): bool,
+        vol.Required("type"): f"{WS_PREFIX}/set_favorite",
+        vol.Required("subject_id"): str,
+        vol.Required("favorite"): bool,
     }
 )
 @websocket_api.ws_require_user()
@@ -631,8 +631,8 @@ async def ws_set_favorite(
 
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): f"{WS_PREFIX}/reorder_favorites",
-        probatio.Required("subject_ids"): [str],
+        vol.Required("type"): f"{WS_PREFIX}/reorder_favorites",
+        vol.Required("subject_ids"): [str],
     }
 )
 @websocket_api.ws_require_user()
@@ -659,7 +659,7 @@ async def ws_reorder_favorites(
 
 
 @websocket_api.websocket_command(
-    {probatio.Required("type"): f"{WS_PREFIX}/reload_content"}
+    {vol.Required("type"): f"{WS_PREFIX}/reload_content"}
 )
 @websocket_api.ws_require_user()
 @websocket_api.async_response
