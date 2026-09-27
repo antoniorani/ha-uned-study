@@ -563,6 +563,10 @@ class UnedStudyPanel extends HTMLElement {
       const data = await this.call("next_item", {
         session_id: this.sessionId,
       });
+      if (data.complete) {
+        this.renderSessionComplete(data.session || {});
+        return;
+      }
       this.currentItem = data.item;
       this.itemStarted = performance.now();
       if (data.item.type === "test") {
@@ -573,6 +577,48 @@ class UnedStudyPanel extends HTMLElement {
     } catch (error) {
       this.renderError(error?.message || String(error));
     }
+  }
+
+  renderSessionComplete(session) {
+    const attempts =
+      (session.correct_count || 0) + (session.incorrect_count || 0);
+    const accuracy = attempts
+      ? `${Math.round(100 * (session.correct_count || 0) / attempts)}%`
+      : "—";
+    this.shell(`
+      <div class="top">
+        <h1>Sesión completada</h1>
+      </div>
+      <div class="card ok">
+        <h2 style="margin-top:0">No quedan elementos en este modo</h2>
+        <div class="stats">
+          <div class="stat">
+            <span class="muted small">Respondidas</span>
+            <strong>${session.answered_count || 0}</strong>
+          </div>
+          <div class="stat">
+            <span class="muted small">Correctas</span>
+            <strong>${session.correct_count || 0}</strong>
+          </div>
+          <div class="stat">
+            <span class="muted small">Incorrectas</span>
+            <strong>${session.incorrect_count || 0}</strong>
+          </div>
+          <div class="stat">
+            <span class="muted small">Acierto</span>
+            <strong>${accuracy}</strong>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:16px">
+          <button id="subject-after-complete">Volver a la asignatura</button>
+          <button class="secondary" id="home-after-complete">Asignaturas</button>
+        </div>
+      </div>
+    `);
+    this.querySelector("#subject-after-complete").onclick = () =>
+      this.openSubject(this.subjectId);
+    this.querySelector("#home-after-complete").onclick = () =>
+      this.loadDashboard();
   }
 
   renderTest(item) {
