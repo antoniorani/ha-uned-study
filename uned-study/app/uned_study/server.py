@@ -916,8 +916,8 @@ async def sync_loop(app: web.Application) -> None:
     content: ContentManager = app["content"]
     config: AppConfig = app["config"]
     while True:
-        await asyncio.sleep(config.sync_interval_hours * 3600)
         await content.sync()
+        await asyncio.sleep(config.sync_interval_hours * 3600)
 
 
 async def on_startup(app: web.Application) -> None:
@@ -926,9 +926,8 @@ async def on_startup(app: web.Application) -> None:
     await asyncio.to_thread(storage.initialize)
     await content.load()
 
-    # Always check GitHub at startup, but cached valid content remains usable
-    # when the network is unavailable.
-    await content.sync()
+    # Remote synchronization runs after the HTTP server has initialized.
+    # Cached valid content is immediately usable even if GitHub is offline.
     app["sync_task"] = asyncio.create_task(sync_loop(app))
 
 
