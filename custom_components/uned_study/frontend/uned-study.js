@@ -503,7 +503,7 @@ class UnedStudyPanel extends HTMLElement {
           <div class="card" style="margin-bottom:16px">
             <h2 style="margin-top:0">Simulacro de examen</h2>
             <p class="muted">
-              ${subject.exam?.questions || subject.item_count} preguntas
+              ${Math.min(subject.exam?.questions || subject.item_count, subject.item_count)} preguntas
               · ${subject.exam?.duration_minutes || 60} min
               · penalización por fallo: ${subject.exam?.wrong_answer_penalty || 0}
             </p>
@@ -819,7 +819,7 @@ class UnedStudyPanel extends HTMLElement {
       <div class="top">
         <h1>Resultado del simulacro</h1>
       </div>
-      <div class="card ${Number(score.grade_10 || 0) >= 5 ? "ok" : ""}">
+      <div class="card">
         <div class="stats">
           <div class="stat"><span class="muted small">Nota /10</span><strong>${grade}</strong></div>
           <div class="stat"><span class="muted small">Puntuación</span><strong>${percentage}%</strong></div>
