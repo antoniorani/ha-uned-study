@@ -96,6 +96,7 @@ class StudyDatabase:
                     item_id TEXT NOT NULL,
                     session_id TEXT,
                     result TEXT NOT NULL,
+                    answer_id TEXT,
                     rating TEXT,
                     response_ms INTEGER,
                     created_at TEXT NOT NULL
@@ -426,7 +427,7 @@ class StudyDatabase:
         with self._lock, self._connect() as db:
             row = db.execute(
                 """SELECT request_id,user_id,subject_id,item_id,session_id,
-                          result,rating,response_ms,created_at
+                          result,answer_id,rating,response_ms,created_at
                    FROM review_history
                    WHERE request_id=? AND user_id=?""",
                 (request_id, user_id),
@@ -457,6 +458,7 @@ class StudyDatabase:
         item_id: str,
         session_id: str,
         result: str,
+        answer_id: str | None,
         rating: str | None,
         response_ms: int | None,
         decision: ScheduleDecision,
@@ -464,7 +466,7 @@ class StudyDatabase:
         return await hass.async_add_executor_job(
             self._record_review,
             request_id, user_id, subject_id, item_id, session_id,
-            result, rating, response_ms, decision,
+            result, answer_id, rating, response_ms, decision,
         )
 
     def _record_review(
@@ -475,6 +477,7 @@ class StudyDatabase:
         item_id: str,
         session_id: str,
         result: str,
+        answer_id: str | None,
         rating: str | None,
         response_ms: int | None,
         decision: ScheduleDecision,
@@ -532,11 +535,11 @@ class StudyDatabase:
             db.execute(
                 """INSERT INTO review_history(
                      request_id,user_id,subject_id,item_id,session_id,
-                     result,rating,response_ms,created_at
-                   ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                     result,answer_id,rating,response_ms,created_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                 (
                     request_id, user_id, subject_id, item_id, session_id,
-                    result, rating, response_ms, now,
+                    result, answer_id, rating, response_ms, now,
                 ),
             )
             db.execute(
