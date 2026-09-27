@@ -80,6 +80,26 @@ def _item_payload(item: StudyItem, *, reveal: bool = False) -> dict[str, Any]:
     }
 
 
+def _exam_available(subject: Subject) -> bool:
+    exam = subject.exam
+    questions = exam.get("questions")
+    duration = exam.get("duration_minutes")
+    penalty = exam.get("wrong_answer_penalty")
+    return (
+        subject.subject_type == "test"
+        and bool(subject.items)
+        and isinstance(questions, int)
+        and not isinstance(questions, bool)
+        and questions > 0
+        and isinstance(duration, int)
+        and not isinstance(duration, bool)
+        and duration > 0
+        and isinstance(penalty, (int, float))
+        and not isinstance(penalty, bool)
+        and penalty >= 0
+    )
+
+
 def _statistics(
     subject: Subject,
     progress: dict[str, Any],
@@ -199,10 +219,7 @@ async def dashboard(request: web.Request) -> web.Response:
                     if active
                     else None
                 ),
-                "exam_available": (
-                    subject.subject_type == "test"
-                    and bool(subject.items)
-                ),
+                "exam_available": _exam_available(subject),
             }
         )
 
@@ -683,8 +700,10 @@ async def start_exam(request: web.Request) -> web.Response:
     subject = content.subjects.get(subject_id)
     if subject is None:
         raise web.HTTPNotFound(text="Subject not found")
-    if subject.subject_type != "test":
-        raise web.HTTPBadRequest(text="Mock exam requires a test subject")
+    if not _exam_available(subject):
+        raise web.HTTPBadRequest(
+            text="Mock exam metadata is incomplete for this subject"
+        )
 
     active = await asyncio.to_thread(
         storage.active_session,
