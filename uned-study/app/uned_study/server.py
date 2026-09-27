@@ -434,6 +434,30 @@ async def next_item(request: web.Request) -> web.Response:
     return web.json_response({"item": _item_payload(item)})
 
 
+async def finish_study_session(request: web.Request) -> web.Response:
+    user = _user_id(request)
+    session_id = request.match_info["session_id"]
+    storage: Storage = request.app["storage"]
+    session = await asyncio.to_thread(
+        storage.get_session,
+        user,
+        session_id,
+    )
+    if (
+        session is None
+        or session["state"] != "active"
+        or session["kind"] not in {"adaptive", "topic"}
+    ):
+        raise web.HTTPNotFound(text="Active study session not found")
+
+    await asyncio.to_thread(
+        storage.complete_session,
+        user,
+        session_id,
+    )
+    return web.json_response({"ok": True})
+
+
 async def answer_question(request: web.Request) -> web.Response:
     user = _user_id(request)
     session_id = request.match_info["session_id"]
@@ -926,6 +950,7 @@ def create_app(config: AppConfig | None = None) -> web.Application:
     app.router.add_post("/api/subjects/{subject_id}/topic", start_topic)
 
     app.router.add_get("/api/sessions/{session_id}/next", next_item)
+    app.router.add_post("/api/sessions/{session_id}/finish", finish_study_session)
     app.router.add_post("/api/sessions/{session_id}/answer", answer_question)
     app.router.add_post("/api/sessions/{session_id}/rate", rate_card)
 
