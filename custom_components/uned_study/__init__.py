@@ -26,6 +26,7 @@ from .panel import (
     async_remove_panel,
 )
 from .runtime import UNEDStudyRuntime
+from .sync_api import async_register_content_sync_commands
 from .websocket import async_register_websocket_commands
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up integration-wide resources."""
     async_register_websocket_commands(hass)
+    async_register_content_sync_commands(hass)
     await async_register_static_assets(hass)
     return True
 
@@ -79,7 +81,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             await synchronizer.async_sync(hass)
         except ContentSyncError as exc:
-            _LOGGER.info("Initial content synchronization unavailable: %s", exc)
+            _LOGGER.info(
+                "Initial content synchronization unavailable: %s", exc
+            )
         else:
             await content.async_reload(hass)
 
