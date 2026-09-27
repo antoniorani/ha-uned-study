@@ -391,6 +391,11 @@ async def ws_next_item(
         )
         return
     runtime, session, subject = loaded
+    if session["state"] != "active":
+        connection.send_error(
+            msg["id"], "inactive_session", "Study session is not active"
+        )
+        return
 
     progress = await runtime.database.async_get_progress_map(
         hass, connection.user.id, subject.id
@@ -459,27 +464,57 @@ async def ws_submit_answer(
             msg["id"], "invalid_item", "This item is not a test question"
         )
         return
-    if session["current_item_id"] != item.id:
-        connection.send_error(
-            msg["id"], "stale_item", "This is not the current item"
-        )
-        return
     if msg["answer_id"] not in {answer.id for answer in item.answers}:
         connection.send_error(
             msg["id"], "invalid_answer", "Unknown answer"
         )
         return
 
-    if await runtime.database.async_request_exists(
-        hass, msg["request_id"]
-    ):
+    previous_request = await runtime.database.async_get_review_request(
+        hass,
+        msg["request_id"],
+        connection.user.id,
+    )
+    if previous_request is not None:
+        if (
+            previous_request["subject_id"] != subject.id
+            or previous_request["item_id"] != item.id
+            or previous_request["session_id"] != session["session_id"]
+            or previous_request["answer_id"] != msg["answer_id"]
+        ):
+            connection.send_error(
+                msg["id"],
+                "request_conflict",
+                "request_id was already used for a different answer",
+            )
+            return
+        progress = await runtime.database.async_get_progress_map(
+            hass, connection.user.id, subject.id
+        )
+        stored = progress.get(item.id)
         connection.send_result(
             msg["id"],
             {
                 "duplicate": True,
-                "correct": msg["answer_id"] == item.correct_answer,
+                "correct": previous_request["result"] == "correct",
                 "item": _serialize_item(item, reveal=True),
+                "next_review_at": (
+                    stored.next_review_at.isoformat()
+                    if stored and stored.next_review_at
+                    else None
+                ),
             },
+        )
+        return
+
+    if session["state"] != "active":
+        connection.send_error(
+            msg["id"], "inactive_session", "Study session is not active"
+        )
+        return
+    if session["current_item_id"] != item.id:
+        connection.send_error(
+            msg["id"], "stale_item", "This is not the current item"
         )
         return
 
@@ -503,6 +538,7 @@ async def ws_submit_answer(
         item_id=item.id,
         session_id=session["session_id"],
         result="correct" if correct else "incorrect",
+        answer_id=msg["answer_id"],
         rating=None,
         response_ms=msg.get("response_ms"),
         decision=decision,
@@ -553,15 +589,51 @@ async def ws_rate_card(
             msg["id"], "invalid_item", "This item is not a flashcard"
         )
         return
+
+    previous_request = await runtime.database.async_get_review_request(
+        hass,
+        msg["request_id"],
+        connection.user.id,
+    )
+    if previous_request is not None:
+        if (
+            previous_request["subject_id"] != subject.id
+            or previous_request["item_id"] != item.id
+            or previous_request["session_id"] != session["session_id"]
+            or previous_request["rating"] != msg["rating"]
+        ):
+            connection.send_error(
+                msg["id"],
+                "request_conflict",
+                "request_id was already used for a different rating",
+            )
+            return
+        progress = await runtime.database.async_get_progress_map(
+            hass, connection.user.id, subject.id
+        )
+        stored = progress.get(item.id)
+        connection.send_result(
+            msg["id"],
+            {
+                "duplicate": True,
+                "next_review_at": (
+                    stored.next_review_at.isoformat()
+                    if stored and stored.next_review_at
+                    else None
+                ),
+            },
+        )
+        return
+
+    if session["state"] != "active":
+        connection.send_error(
+            msg["id"], "inactive_session", "Study session is not active"
+        )
+        return
     if session["current_item_id"] != item.id:
         connection.send_error(
             msg["id"], "stale_item", "This is not the current item"
         )
-        return
-    if await runtime.database.async_request_exists(
-        hass, msg["request_id"]
-    ):
-        connection.send_result(msg["id"], {"duplicate": True})
         return
 
     progress = await runtime.database.async_get_progress_map(
@@ -584,6 +656,7 @@ async def ws_rate_card(
         item_id=item.id,
         session_id=session["session_id"],
         result="correct" if correct else "incorrect",
+        answer_id=None,
         rating=msg["rating"],
         response_ms=msg.get("response_ms"),
         decision=decision,
