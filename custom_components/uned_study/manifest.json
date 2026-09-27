@@ -1,0 +1,11 @@
+{
+  "domain": "uned_study",
+  "name": "UNED Study",
+  "codeowners": ["@antoniorani"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http"],
+  "documentation": "https://github.com/antoniorani/ha-uned-study",
+  "integration_type": "service",
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

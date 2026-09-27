@@ -1,0 +1,18 @@
+{
+  "title": "UNED Study",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure UNED Study",
+        "description": "Configure the repository that will provide subject content. Synchronization will be handled by the integration.",
+        "data": {
+          "content_repository": "Content repository",
+          "content_branch": "Content branch"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "UNED Study is already configured."
+    }
+  }
+}

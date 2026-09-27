@@ -1,0 +1,18 @@
+{
+  "title": "UNED Study",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar UNED Study",
+        "description": "Configura el repositorio que proporcionará el contenido de las asignaturas. La sincronización será gestionada por la integración.",
+        "data": {
+          "content_repository": "Repositorio de contenidos",
+          "content_branch": "Rama de contenidos"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "UNED Study ya está configurado."
+    }
+  }
+}
