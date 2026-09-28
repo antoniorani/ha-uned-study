@@ -1,5 +1,9 @@
 # UNED Study — documentación
 
+## Estado
+
+UNED Study se distribuye como aplicación estable de Home Assistant. Una asignatura es siempre de un único tipo: **tarjetas** o **test**.
+
 ## Uso normal
 
 1. Abre **UNED Study** desde la barra lateral.

@@ -1,6 +1,8 @@
 # UNED Study — Home Assistant App
 
-UNED Study is a study application for Home Assistant OS. It is distributed as a Home Assistant **app** (formerly add-on) and opens inside Home Assistant through Ingress.
+UNED Study is a stable study application for Home Assistant OS. It is distributed as a Home Assistant **app** (formerly add-on) and opens inside Home Assistant through Ingress.
+
+Each subject has exactly one study format: **test** or **flashcards**. The application deliberately does not mix both formats inside the same subject.
 
 ## Install
 
