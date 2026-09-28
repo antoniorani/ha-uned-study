@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Primera versión estable de UNED Study para Home Assistant.
+- La aplicación deja la fase experimental y se publica con `stage: stable`.
+- Se consolida como contrato estable que cada asignatura es exclusivamente de tipo `test` o `flashcards`.
+- Se refuerza CI para impedir regresiones del estado estable, del contrato de tipos y de los recursos de marca.
+- Se añaden icono y logotipo nativos para la presentación de la app en Home Assistant.
+- Se conservan todas las correcciones de la fase alpha: Ingress, persistencia multiusuario, sincronización atómica de contenido, estudio adaptativo, simulacros, tema claro/oscuro, recursos sin caché obsoleta e historial de preguntas de examen.
+
 ## 0.2.0-alpha.4
 
 - Evita que iOS/Home Assistant reutilice JavaScript y CSS de versiones anteriores: los recursos estáticos llevan versión y se sirven con `no-store`.
