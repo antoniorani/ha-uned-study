@@ -44,7 +44,20 @@ jobs:
           assert config["panel_admin"] is False
           assert config["backup"] == "cold"
           assert set(config["arch"]) == {"amd64", "aarch64"}
-          assert config["stage"] == "experimental"
+          assert config["stage"] == "stable"
+          assert config["version"] == "0.2.0"
+          assert "alpha" not in config["version"].lower()
+
+          def png_size(path: str) -> tuple[int, int]:
+              data = Path(path).read_bytes()
+              assert data[:8] == b"\x89PNG\r\n\x1a\n"
+              return (
+                  int.from_bytes(data[16:20], "big"),
+                  int.from_bytes(data[20:24], "big"),
+              )
+
+          assert png_size("uned-study/icon.png") == (128, 128)
+          assert png_size("uned-study/logo.png") == (250, 100)
           PY
 
       - name: Compile Python
