@@ -59,6 +59,24 @@ class ContentTests(unittest.TestCase):
         with self.assertRaises(ContentError):
             parse_subject(value, directory_name="demo")
 
+    def test_test_subject_cannot_contain_flashcard_shape(self) -> None:
+        value = copy.deepcopy(SUBJECT)
+        value["items"][0] = {
+            "id": "f1",
+            "topic": "tema",
+            "importance": 3,
+            "front_md": "Frente",
+            "back_md": "Reverso",
+        }
+        with self.assertRaises(ContentError):
+            parse_subject(value, directory_name="demo")
+
+    def test_flashcard_subject_cannot_contain_test_shape(self) -> None:
+        value = copy.deepcopy(SUBJECT)
+        value["type"] = "flashcards"
+        with self.assertRaises(ContentError):
+            parse_subject(value, directory_name="demo")
+
 
 if __name__ == "__main__":
     unittest.main()
