@@ -120,6 +120,10 @@ def parse_subject(data: object, *, directory_name: str) -> Subject:
             topic=topic,
             importance=importance,
             tags=_string_tuple(raw.get("tags"), f"{context}.tags"),
+            exam_history=_string_tuple(
+                raw.get("exam_history"),
+                f"{context}.exam_history",
+            ),
             source=dict(raw["source"]) if isinstance(raw.get("source"), Mapping) else None,
         )
 
