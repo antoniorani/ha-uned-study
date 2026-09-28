@@ -14,46 +14,20 @@
     examTimer: null,
   };
 
-  const THEME_VARIABLES = [
-    "--primary-color",
-    "--accent-color",
-    "--primary-background-color",
-    "--secondary-background-color",
-    "--card-background-color",
-    "--primary-text-color",
-    "--secondary-text-color",
-    "--text-primary-color",
-    "--divider-color",
-    "--success-color",
-    "--error-color",
-    "--warning-color",
-  ];
-
   let themePoll = null;
+  let schemeMedia = null;
 
   function parentThemeContext() {
     try {
       const frame = window.frameElement;
-      if (!frame || !frame.ownerDocument || !frame.parentNode) return null;
+      if (!frame || !frame.ownerDocument) return null;
       return {
         frame,
-        document: frame.ownerDocument,
-        container: frame.parentNode,
         view: frame.ownerDocument.defaultView || window.parent,
       };
     } catch (_error) {
       return null;
     }
-  }
-
-  function resolvedParentColor(variable, context, probe) {
-    const fallback = "rgb(1, 2, 3)";
-    probe.style.backgroundColor = `var(${variable}, ${fallback})`;
-    const value = context.view
-      .getComputedStyle(probe)
-      .backgroundColor
-      .trim();
-    return value && value !== fallback ? value : "";
   }
 
   function isDarkColor(value) {
@@ -66,48 +40,48 @@
     return luminance < 0.45;
   }
 
+  function devicePrefersDark() {
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches === true;
+  }
+
   function syncHomeAssistantTheme() {
     const context = parentThemeContext();
-    if (!context) return false;
+    let background = "";
+    let dark = null;
 
-    const probe = context.document.createElement("span");
-    probe.setAttribute("aria-hidden", "true");
-    Object.assign(probe.style, {
-      position: "absolute",
-      width: "0",
-      height: "0",
-      overflow: "hidden",
-      pointerEvents: "none",
-      visibility: "hidden",
-    });
-
-    try {
-      context.container.appendChild(probe);
-      let applied = 0;
-      for (const variable of THEME_VARIABLES) {
-        const value = resolvedParentColor(variable, context, probe);
-        if (!value) continue;
-        if (
-          document.documentElement.style.getPropertyValue(variable) !== value
-        ) {
-          document.documentElement.style.setProperty(variable, value);
-        }
-        applied += 1;
+    if (context) {
+      try {
+        // Home Assistant resolves --primary-background-color on the iframe
+        // itself. Reading that final color is more reliable than trying to
+        // make CSS custom properties cross the iframe boundary.
+        background = context.view
+          .getComputedStyle(context.frame)
+          .backgroundColor
+          .trim();
+        dark = isDarkColor(background);
+      } catch (_error) {
+        background = "";
       }
-
-      const background = resolvedParentColor(
-        "--primary-background-color",
-        context,
-        probe
-      );
-      const dark = isDarkColor(background);
-      if (dark !== null) {
-        document.documentElement.style.colorScheme = dark ? "dark" : "light";
-      }
-      return applied > 0;
-    } finally {
-      probe.remove();
     }
+
+    if (dark === null) {
+      dark = devicePrefersDark();
+    }
+
+    const rootElement = document.documentElement;
+    rootElement.dataset.theme = dark ? "dark" : "light";
+    rootElement.style.colorScheme = dark ? "dark" : "light";
+
+    if (
+      background
+      && background !== "transparent"
+      && background !== "rgba(0, 0, 0, 0)"
+    ) {
+      rootElement.style.setProperty("--primary-background-color", background);
+    } else {
+      rootElement.style.removeProperty("--primary-background-color");
+    }
+    return dark;
   }
 
   function watchHomeAssistantTheme() {
@@ -115,10 +89,11 @@
     window.addEventListener("focus", syncHomeAssistantTheme);
     window.addEventListener("pageshow", syncHomeAssistantTheme);
 
-    // Theme CSS variables do not cross the iframe boundary and Home Assistant
-    // can switch themes without mutating the iframe itself. Polling this small
-    // set of colors keeps the embedded app synchronized with negligible cost.
-    themePoll = window.setInterval(syncHomeAssistantTheme, 1200);
+    schemeMedia = window.matchMedia?.("(prefers-color-scheme: dark)") || null;
+    schemeMedia?.addEventListener?.("change", syncHomeAssistantTheme);
+
+    // The host theme can change without touching the iframe document.
+    themePoll = window.setInterval(syncHomeAssistantTheme, 1000);
   }
 
   function endpoint(path) {
@@ -400,6 +375,7 @@
       const cards = data.subjects.length
         ? data.subjects.map((subject) => {
             const p = subject.progress || {};
+            const examCount = Number(subject.exam_question_count || 0);
             const primary = subject.active_session
               ? "Continuar"
               : "Estudiar";
@@ -419,6 +395,7 @@
                 </div>
                 <div class="muted small">
                   ${subject.type === "test" ? "Test" : "Tarjetas"}
+                  ${examCount ? ` · ${examCount} ${examCount === 1 ? "pregunta" : "preguntas"} de examen` : ""}
                 </div>
                 <div class="progress-line">
                   <span>${p.studied || 0}/${p.total || 0} estudiadas</span>
@@ -457,7 +434,9 @@
       shell(
         `
           <div class="grid">${cards}</div>
-          <div class="footer">${escapeHtml(syncText)}</div>
+          <div class="footer">
+            UNED Study ${escapeHtml(data.app?.version || "dev")} · ${escapeHtml(syncText)}
+          </div>
         `,
         data.user?.name ? `Hola, ${data.user.name}` : "Asignaturas"
       );
