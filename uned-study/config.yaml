@@ -1,5 +1,5 @@
 name: "UNED Study"
-version: "0.2.0-alpha.1"
+version: "0.2.0-alpha.2"
 slug: "uned_study"
 description: "Estudio adaptativo y simulacros dentro de Home Assistant"
 url: "https://github.com/antoniorani/ha-uned-study"
