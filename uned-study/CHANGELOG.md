@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-alpha.4
+
+- Evita que iOS/Home Assistant reutilice JavaScript y CSS de versiones anteriores: los recursos estáticos llevan versión y se sirven con `no-store`.
+- Detecta claro/oscuro a partir del color ya resuelto del iframe por Home Assistant, con `prefers-color-scheme` como fallback.
+- Muestra la versión efectiva del add-on en el pie de la pantalla principal.
+- Las asignaturas test indican en la portada cuántas preguntas tienen historial de examen, facilitando comprobar que el metadato se ha cargado.
+
 ## 0.2.0-alpha.3
 
 - Corrige la sincronización del tema de Home Assistant resolviendo los colores finales dentro del contexto del panel Ingress antes de copiarlos al iframe.

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import html
 import json
 import mimetypes
+import os
 from pathlib import Path
 import uuid
 from typing import Any
@@ -22,6 +23,7 @@ from .storage import Storage
 
 STATIC_DIR = Path(__file__).parent / "static"
 INGRESS_PROXY_IP = "172.30.32.2"
+APP_VERSION = os.environ.get("UNED_STUDY_VERSION", "dev")
 
 
 def _user_id(request: web.Request) -> str:
@@ -184,6 +186,9 @@ async def index(request: web.Request) -> web.Response:
     page = template.replace(
         "__BASE_PATH__",
         html.escape(base, quote=True),
+    ).replace(
+        "__STATIC_VERSION__",
+        html.escape(APP_VERSION, quote=True),
     )
     return web.Response(
         text=page,
@@ -199,7 +204,13 @@ async def static_file(request: web.Request) -> web.FileResponse:
     path = STATIC_DIR / name
     if not path.is_file():
         raise web.HTTPNotFound
-    return web.FileResponse(path)
+    return web.FileResponse(
+        path,
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 async def dashboard(request: web.Request) -> web.Response:
@@ -237,6 +248,9 @@ async def dashboard(request: web.Request) -> web.Response:
                     else None
                 ),
                 "exam_available": _exam_available(subject),
+                "exam_question_count": sum(
+                    1 for item in subject.items if item.exam_history
+                ),
             }
         )
 
@@ -252,6 +266,7 @@ async def dashboard(request: web.Request) -> web.Response:
 
     return web.json_response(
         {
+            "app": {"version": APP_VERSION},
             "user": {
                 "id": user,
                 "name": _display_name(request),

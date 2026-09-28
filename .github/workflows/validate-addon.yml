@@ -103,7 +103,20 @@ jobs:
           curl --fail \
             -H 'X-Ingress-Path: /api/hassio_ingress/test-token' \
             http://127.0.0.1:18099/ \
-            | grep -q '<base href="/api/hassio_ingress/test-token/">'
+            >/tmp/uned-index.html
+          grep -q '<base href="/api/hassio_ingress/test-token/">' /tmp/uned-index.html
+          grep -q 'static/app.js?v=ci' /tmp/uned-index.html
+          grep -q 'static/styles.css?v=ci' /tmp/uned-index.html
+
+          curl --fail --silent --show-error -D /tmp/uned-static-headers.txt \
+            -o /dev/null \
+            http://127.0.0.1:18099/static/app.js
+          grep -qi '^cache-control: no-store, max-age=0' /tmp/uned-static-headers.txt
+
+          curl --fail --silent --show-error \
+            -H 'X-Debug-User-Id: ci-user' \
+            http://127.0.0.1:18099/api/dashboard \
+            | grep -q '"version": "ci"'
 
   repository-discovery:
     runs-on: ubuntu-latest
