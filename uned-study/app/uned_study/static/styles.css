@@ -33,6 +33,30 @@
   }
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --secondary-background-color: #eeeeee;
+  --card-background-color: #ffffff;
+  --primary-text-color: #202124;
+  --secondary-text-color: #6b7280;
+  --divider-color: #e4e4e7;
+  --success-color: #2e7d32;
+  --error-color: #c62828;
+  --warning-color: #d69e00;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --secondary-background-color: #171a20;
+  --card-background-color: #1c1f26;
+  --primary-text-color: #e8eaed;
+  --secondary-text-color: #aeb4bd;
+  --divider-color: #3a3f47;
+  --success-color: #66bb6a;
+  --error-color: #ef5350;
+  --warning-color: #ffb74d;
+}
+
 * { box-sizing: border-box; }
 
 body {
