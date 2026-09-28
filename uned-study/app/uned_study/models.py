@@ -25,6 +25,7 @@ class StudyItem:
     topic: str
     importance: int
     tags: tuple[str, ...] = ()
+    exam_history: tuple[str, ...] = ()
     question_md: str = ""
     answers: tuple[AnswerOption, ...] = ()
     correct_answer: str = ""
