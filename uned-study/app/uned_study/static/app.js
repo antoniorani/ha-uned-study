@@ -14,6 +14,80 @@
     examTimer: null,
   };
 
+  const THEME_VARIABLES = [
+    "--primary-color",
+    "--accent-color",
+    "--primary-background-color",
+    "--secondary-background-color",
+    "--card-background-color",
+    "--primary-text-color",
+    "--secondary-text-color",
+    "--text-primary-color",
+    "--divider-color",
+    "--success-color",
+    "--error-color",
+    "--warning-color",
+  ];
+
+  let themeObserver = null;
+
+  function parentThemeSources() {
+    try {
+      if (!window.parent || window.parent === window) return [];
+      const doc = window.parent.document;
+      return [
+        window.frameElement,
+        doc.querySelector("home-assistant"),
+        doc.documentElement,
+        doc.body,
+      ].filter(Boolean);
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function syncHomeAssistantTheme() {
+    const sources = parentThemeSources();
+    if (!sources.length) return;
+
+    for (const variable of THEME_VARIABLES) {
+      for (const source of sources) {
+        const value = window.parent
+          .getComputedStyle(source)
+          .getPropertyValue(variable)
+          .trim();
+        if (value) {
+          document.documentElement.style.setProperty(variable, value);
+          break;
+        }
+      }
+    }
+  }
+
+  function watchHomeAssistantTheme() {
+    syncHomeAssistantTheme();
+    try {
+      if (!window.parent || window.parent === window) return;
+      const doc = window.parent.document;
+      const targets = [
+        doc.documentElement,
+        doc.body,
+        doc.querySelector("home-assistant"),
+      ].filter(Boolean);
+      themeObserver = new MutationObserver(syncHomeAssistantTheme);
+      targets.forEach((target) => {
+        themeObserver.observe(target, {
+          attributes: true,
+          attributeFilter: ["class", "style"],
+        });
+      });
+      window.addEventListener("focus", syncHomeAssistantTheme);
+      window.addEventListener("pageshow", syncHomeAssistantTheme);
+    } catch (_error) {
+      themeObserver = null;
+    }
+  }
+
   function endpoint(path) {
     return basePath + String(path).replace(/^\/+/, "");
   }
@@ -40,6 +114,27 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function examBadge(item) {
+    const history = Array.isArray(item?.exam_history)
+      ? item.exam_history.filter(
+          (value) => typeof value === "string" && value.trim()
+        )
+      : [];
+    if (!history.length) return "";
+
+    const detail = history.length === 1
+      ? `Convocatoria documentada: ${history[0]}`
+      : `Convocatorias documentadas: ${history.join(", ")}`;
+    return `
+      <div class="item-meta">
+        <span class="badge exam-source" title="${escapeHtml(detail)}">
+          Pregunta de examen
+        </span>
+        <span class="muted small">${escapeHtml(history.join(" · "))}</span>
+      </div>
+    `;
   }
 
   function assetUrl(subjectId, raw) {
@@ -489,6 +584,7 @@
     shell(
       `
         <div class="card study-card">
+          ${examBadge(item)}
           ${renderMarkdown(item.question_md)}
           <div class="answers">
             ${item.answers.map((answer) => `
@@ -532,6 +628,7 @@
       shell(
         `
           <div class="card study-card feedback ${result.correct ? "correct" : "incorrect"}">
+            ${examBadge(item)}
             <h2>${result.correct ? "Correcta" : "Incorrecta"}</h2>
             ${item.explanation_md
               ? renderMarkdown(item.explanation_md)
@@ -740,6 +837,7 @@
           <span class="clock" id="clock">--:--</span>
         </div>
         <div class="card study-card">
+          ${examBadge(item)}
           ${renderMarkdown(item.question_md)}
           <div class="answers">
             ${item.answers.map((answer) => `
@@ -852,6 +950,7 @@
       return `
         <details class="card review">
           <summary>Pregunta ${index + 1} · ${status}</summary>
+          ${examBadge(item)}
           ${renderMarkdown(item.question_md)}
           <div class="answers">${answerRows}</div>
           ${item.explanation_md ? `<hr>${renderMarkdown(item.explanation_md)}` : ""}
@@ -880,5 +979,6 @@
     document.getElementById("home").onclick = home;
   }
 
+  watchHomeAssistantTheme();
   home();
 })();

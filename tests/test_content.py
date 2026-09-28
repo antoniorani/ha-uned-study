@@ -18,6 +18,7 @@ SUBJECT = {
             "id": "q1",
             "topic": "tema",
             "importance": 3,
+            "exam_history": ["2025-02", "2025-06"],
             "question_md": "Pregunta",
             "answers": [
                 {"id": "a", "text_md": "A"},
@@ -34,6 +35,7 @@ class ContentTests(unittest.TestCase):
         value = parse_subject(SUBJECT, directory_name="demo")
         self.assertEqual(value.id, "demo")
         self.assertEqual(value.items[0].correct_answer, "a")
+        self.assertEqual(value.items[0].exam_history, ("2025-02", "2025-06"))
 
     def test_folder_id_is_durable_contract(self) -> None:
         with self.assertRaises(ContentError):
@@ -48,6 +50,12 @@ class ContentTests(unittest.TestCase):
     def test_topic_reference_must_exist(self) -> None:
         value = copy.deepcopy(SUBJECT)
         value["items"][0]["topic"] = "missing"
+        with self.assertRaises(ContentError):
+            parse_subject(value, directory_name="demo")
+
+    def test_exam_history_must_be_a_string_list(self) -> None:
+        value = copy.deepcopy(SUBJECT)
+        value["items"][0]["exam_history"] = "2025-02"
         with self.assertRaises(ContentError):
             parse_subject(value, directory_name="demo")
 

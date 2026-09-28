@@ -58,6 +58,7 @@ def _item_payload(item: StudyItem, *, reveal: bool = False) -> dict[str, Any]:
             "type": "test",
             "topic": item.topic,
             "importance": item.importance,
+            "exam_history": list(item.exam_history),
             "question_md": item.question_md,
             "answers": [
                 {"id": answer.id, "text_md": answer.text_md}
@@ -74,6 +75,7 @@ def _item_payload(item: StudyItem, *, reveal: bool = False) -> dict[str, Any]:
         "type": "flashcard",
         "topic": item.topic,
         "importance": item.importance,
+        "exam_history": list(item.exam_history),
         "front_md": item.front_md,
         "back_md": item.back_md,
         "hint_md": item.hint_md,
