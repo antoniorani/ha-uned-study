@@ -29,63 +29,96 @@
     "--warning-color",
   ];
 
-  let themeObserver = null;
+  let themePoll = null;
 
-  function parentThemeSources() {
+  function parentThemeContext() {
     try {
-      if (!window.parent || window.parent === window) return [];
-      const doc = window.parent.document;
-      return [
-        window.frameElement,
-        doc.querySelector("home-assistant"),
-        doc.documentElement,
-        doc.body,
-      ].filter(Boolean);
+      const frame = window.frameElement;
+      if (!frame || !frame.ownerDocument || !frame.parentNode) return null;
+      return {
+        frame,
+        document: frame.ownerDocument,
+        container: frame.parentNode,
+        view: frame.ownerDocument.defaultView || window.parent,
+      };
     } catch (_error) {
-      return [];
+      return null;
     }
   }
 
-  function syncHomeAssistantTheme() {
-    const sources = parentThemeSources();
-    if (!sources.length) return;
+  function resolvedParentColor(variable, context, probe) {
+    const fallback = "rgb(1, 2, 3)";
+    probe.style.backgroundColor = `var(${variable}, ${fallback})`;
+    const value = context.view
+      .getComputedStyle(probe)
+      .backgroundColor
+      .trim();
+    return value && value !== fallback ? value : "";
+  }
 
-    for (const variable of THEME_VARIABLES) {
-      for (const source of sources) {
-        const value = window.parent
-          .getComputedStyle(source)
-          .getPropertyValue(variable)
-          .trim();
-        if (value) {
+  function isDarkColor(value) {
+    const match = String(value).match(
+      /rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/
+    );
+    if (!match) return null;
+    const [, r, g, b] = match.map(Number);
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance < 0.45;
+  }
+
+  function syncHomeAssistantTheme() {
+    const context = parentThemeContext();
+    if (!context) return false;
+
+    const probe = context.document.createElement("span");
+    probe.setAttribute("aria-hidden", "true");
+    Object.assign(probe.style, {
+      position: "absolute",
+      width: "0",
+      height: "0",
+      overflow: "hidden",
+      pointerEvents: "none",
+      visibility: "hidden",
+    });
+
+    try {
+      context.container.appendChild(probe);
+      let applied = 0;
+      for (const variable of THEME_VARIABLES) {
+        const value = resolvedParentColor(variable, context, probe);
+        if (!value) continue;
+        if (
+          document.documentElement.style.getPropertyValue(variable) !== value
+        ) {
           document.documentElement.style.setProperty(variable, value);
-          break;
         }
+        applied += 1;
       }
+
+      const background = resolvedParentColor(
+        "--primary-background-color",
+        context,
+        probe
+      );
+      const dark = isDarkColor(background);
+      if (dark !== null) {
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      }
+      return applied > 0;
+    } finally {
+      probe.remove();
     }
   }
 
   function watchHomeAssistantTheme() {
     syncHomeAssistantTheme();
-    try {
-      if (!window.parent || window.parent === window) return;
-      const doc = window.parent.document;
-      const targets = [
-        doc.documentElement,
-        doc.body,
-        doc.querySelector("home-assistant"),
-      ].filter(Boolean);
-      themeObserver = new MutationObserver(syncHomeAssistantTheme);
-      targets.forEach((target) => {
-        themeObserver.observe(target, {
-          attributes: true,
-          attributeFilter: ["class", "style"],
-        });
-      });
-      window.addEventListener("focus", syncHomeAssistantTheme);
-      window.addEventListener("pageshow", syncHomeAssistantTheme);
-    } catch (_error) {
-      themeObserver = null;
-    }
+    window.addEventListener("focus", syncHomeAssistantTheme);
+    window.addEventListener("pageshow", syncHomeAssistantTheme);
+
+    // Theme CSS variables do not cross the iframe boundary and Home Assistant
+    // can switch themes without mutating the iframe itself. Polling this small
+    // set of colors keeps the embedded app synchronized with negligible cost.
+    themePoll = window.setInterval(syncHomeAssistantTheme, 1200);
   }
 
   function endpoint(path) {

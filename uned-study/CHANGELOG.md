@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-alpha.3
+
+- Corrige la sincronización del tema de Home Assistant resolviendo los colores finales dentro del contexto del panel Ingress antes de copiarlos al iframe.
+- Mantiene la interfaz sincronizada si el usuario cambia de tema mientras la app está abierta.
+
 ## 0.2.0-alpha.2
 
 - La interfaz hereda el tema claro/oscuro y los colores activos de Home Assistant mediante Ingress.
