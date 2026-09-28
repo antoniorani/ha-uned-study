@@ -1,5 +1,5 @@
 name: "UNED Study"
-version: "0.2.0-alpha.4"
+version: "0.2.0"
 slug: "uned_study"
 description: "Estudio adaptativo y simulacros dentro de Home Assistant"
 url: "https://github.com/antoniorani/ha-uned-study"
@@ -15,7 +15,7 @@ panel_icon: "mdi:school"
 panel_title: "UNED Study"
 panel_admin: false
 backup: cold
-stage: experimental
+stage: stable
 watchdog: "http://[HOST]:[PORT:8099]/health"
 options:
   content_repository: "https://github.com/antoniorani/uned-study-content"
