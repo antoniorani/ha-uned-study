@@ -45,7 +45,7 @@ jobs:
           assert config["backup"] == "cold"
           assert set(config["arch"]) == {"amd64", "aarch64"}
           assert config["stage"] == "stable"
-          assert config["version"] == "0.2.0"
+          assert config["version"] == "0.2.1"
           assert "alpha" not in config["version"].lower()
 
           def png_size(path: str) -> tuple[int, int]:

@@ -218,6 +218,11 @@ async def dashboard(request: web.Request) -> web.Response:
     storage: Storage = request.app["storage"]
     content: ContentManager = request.app["content"]
 
+    # The dashboard is the entry point of the UI. Refresh remote content here
+    # so newly added subjects appear as soon as the user opens UNED Study.
+    # ContentManager.sync() keeps the last valid cached snapshot on failure.
+    await content.sync()
+
     preferences, = await asyncio.gather(
         asyncio.to_thread(storage.preferences, user),
     )

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Al abrir el panel principal se comprueba inmediatamente el repositorio de contenidos, por lo que las nuevas asignaturas aparecen sin esperar al intervalo periódico ni reiniciar el add-on.
+- Si GitHub no está disponible o la actualización no es válida, se mantiene la última copia local válida y la aplicación sigue siendo utilizable.
+- Se añade una prueba de regresión para garantizar que la carga del panel dispara la sincronización.
+
 ## 0.2.0
 
 - Primera versión estable de UNED Study para Home Assistant.
