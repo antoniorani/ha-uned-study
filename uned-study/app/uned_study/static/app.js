@@ -637,11 +637,20 @@
       );
 
       const item = result.item;
+      const correctAnswer = result.correct
+        ? null
+        : item.answers.find((answer) => answer.id === item.correct_answer);
       shell(
         `
           <div class="card study-card feedback ${result.correct ? "correct" : "incorrect"}">
             ${examBadge(item)}
             <h2>${result.correct ? "Correcta" : "Incorrecta"}</h2>
+            ${correctAnswer ? `
+              <div>
+                <strong>Respuesta correcta:</strong>
+                ${renderMarkdown(correctAnswer.text_md)}
+              </div>
+            ` : ""}
             ${item.explanation_md
               ? renderMarkdown(item.explanation_md)
               : ""}

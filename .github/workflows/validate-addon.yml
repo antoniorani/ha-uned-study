@@ -66,6 +66,9 @@ jobs:
       - name: Check frontend JavaScript
         run: node --check uned-study/app/uned_study/static/app.js
 
+      - name: Run frontend regression tests
+        run: node --test tests/test_feedback.cjs
+
       - name: Run regression tests
         env:
           PYTHONPATH: uned-study/app
